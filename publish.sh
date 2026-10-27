@@ -11,7 +11,7 @@ sed -i -E "s/versionCode = [0-9]+; versionName = \"[^\"]+\"/versionCode = $NEW; 
 gradle assembleRelease -q
 APK="DahuaViewer-$VER.apk"; cp app/build/outputs/apk/release/app-release.apk "$APK"
 "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify "$APK"
-"$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | head -1
+"$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | sed -n 1p
 sha256sum "$APK" | awk '{print $1"  '"$APK"'"}' > "$APK.sha256"
 SHA=$(cut -d' ' -f1 "$APK.sha256")
 git add -A && git commit -qm "v$VER" && git push -q
