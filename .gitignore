@@ -1,0 +1,13 @@
+*.keystore
+*.jks
+ks_pass.txt
+local.properties
+.gradle/
+build/
+app/build/
+*.apk
+*.txt
+!app/**/*.txt
+.idea/
+*.iml
+captures/

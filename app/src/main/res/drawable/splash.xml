@@ -1,0 +1,3 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android"><item android:drawable="@color/bg"/>
+<item android:gravity="center" android:width="144dp" android:height="144dp"><shape android:shape="oval"><solid android:color="@color/accent"/></shape></item>
+<item android:gravity="center" android:width="144dp" android:height="144dp" android:drawable="@drawable/ic_lens"/></layer-list>

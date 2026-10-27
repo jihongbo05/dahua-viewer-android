@@ -1,0 +1,12 @@
+<resources>
+  <color name="accent">#FF6A00</color><color name="bg">#F4F5F7</color>
+  <style name="Theme.App" parent="Theme.Material3.Light.NoActionBar">
+    <item name="colorPrimary">@color/accent</item><item name="colorOnPrimary">#FFFFFF</item>
+    <item name="colorSecondaryContainer">#FFE3D1</item><item name="colorPrimaryContainer">#FFE3D1</item>
+    <item name="android:windowBackground">@color/bg</item>
+    <item name="android:statusBarColor">@color/bg</item><item name="android:windowLightStatusBar">true</item>
+    <item name="android:navigationBarColor">#FFFFFF</item>
+  </style>
+  <style name="Theme.App.Starting"><item name="android:windowBackground">@drawable/splash</item></style>
+  <style name="Theme.App.Player"><item name="android:statusBarColor">#000000</item><item name="android:windowLightStatusBar">false</item></style>
+</resources>
