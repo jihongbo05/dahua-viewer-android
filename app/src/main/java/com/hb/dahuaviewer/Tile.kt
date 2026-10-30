@@ -56,13 +56,18 @@ class Tile(ctx: Context, showLabel: Boolean = true) : FrameLayout(ctx) {
     val mx = (sc - 1) * width / 2; val my = (sc - 1) * height / 2
     layout.translationX = layout.translationX.coerceIn(-mx, mx); layout.translationY = layout.translationY.coerceIn(-my, my)
   }
+  fun toggleZoom() { if (zoomed) resetZoom() else { sc = 2.5f; applyZoom() } }
+  var onSwipe: ((Int) -> Unit)? = null
   fun resetZoom() { sc = 1f; layout.translationX = 0f; layout.translationY = 0f; applyZoom() }
   var onTap: (() -> Unit)? = null; var onDouble: (() -> Unit)? = null; var onLong: (() -> Unit)? = null
   private val gd = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
     override fun onDown(e: MotionEvent) = true
     override fun onSingleTapConfirmed(e: MotionEvent): Boolean { onTap?.invoke(); return true }
     override fun onDoubleTap(e: MotionEvent): Boolean { onDouble?.invoke(); return true }
-    override fun onLongPress(e: MotionEvent) { if (!zoomed) onLong?.invoke() }
+    override fun onLongPress(e: MotionEvent) { if (!zoomed && onLong != null) { performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS); onLong?.invoke() } }
+    override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {
+      if (e1 == null || zoomed || onSwipe == null) return false
+      val dx = e2.x - e1.x; if (kotlin.math.abs(dx) > width / 4 && kotlin.math.abs(dx) > 2 * kotlin.math.abs(e2.y - e1.y)) { onSwipe?.invoke(if (dx < 0) 1 else -1); return true }; return false }
     override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
       if (zoomable && zoomed) { layout.translationX -= dx; layout.translationY -= dy; applyZoom(); return true }; return false }
   })

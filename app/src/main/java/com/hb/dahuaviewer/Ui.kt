@@ -28,6 +28,9 @@ fun Context.pill(t: String, color: Int) = TextView(this).apply {
   text = "●  $t"; textSize = 12f; setTextColor(color); typeface = Typeface.DEFAULT_BOLD
   background = round(soft(color), 12); setPadding(dp(10), dp(4), dp(10), dp(4)) }
 fun TextView.setPill(t: String, color: Int) { text = "●  $t"; setTextColor(color); background = context.round(soft(color), 12) }
+/** 大屏判断（折叠屏内屏/平板/宽多窗口）：最短边 ≥ 600dp 或当前宽 ≥ 840dp */
+fun Context.wide() = resources.configuration.let { it.smallestScreenWidthDp >= 600 || it.screenWidthDp >= 840 }
+fun Context.widthDp() = resources.configuration.screenWidthDp
 fun Context.dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 fun Context.tv(t: String, sp: Float = 14f, color: Int = TEXT1, bold: Boolean = false) = TextView(this).apply {
   text = t; textSize = sp; setTextColor(color); if (bold) typeface = Typeface.DEFAULT_BOLD }
@@ -43,9 +46,15 @@ fun Context.drw(res: Int) = ContextCompat.getDrawable(this, res)!!
 /** 16:9 自适应容器 */
 class Ratio(c: Context) : FrameLayout(c) {
   var enabledRatio = true
+  /** 高度上限（大屏/折叠屏避免视频过高；画面由播放器等比缩放，不拉伸） */
+  var maxH = Int.MAX_VALUE
   override fun onMeasure(w: Int, h: Int) {
     if (!enabledRatio) return super.onMeasure(w, h)
     val width = MeasureSpec.getSize(w)
-    super.onMeasure(w, MeasureSpec.makeMeasureSpec(width * 9 / 16, MeasureSpec.EXACTLY))
+    super.onMeasure(w, MeasureSpec.makeMeasureSpec(minOf(width * 9 / 16, maxH), MeasureSpec.EXACTLY))
   }
 }
+
+/** 统一操作反馈：Snackbar（底部，短暂） */
+fun View.snack(msg: String, long: Boolean = false) = com.google.android.material.snackbar.Snackbar.make(this, msg, if (long) com.google.android.material.snackbar.Snackbar.LENGTH_LONG else com.google.android.material.snackbar.Snackbar.LENGTH_SHORT).show()
+fun android.app.Activity.snack(msg: String, long: Boolean = false) = findViewById<View>(android.R.id.content).snack(msg, long)

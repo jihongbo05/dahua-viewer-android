@@ -61,6 +61,55 @@ class MinePage(a: MainActivity) : Page(a) {
   private val activeTv = a.tv("", 12f, TEXT2)
   private val statusPill = a.pill("未检测", TEXT2)
   private var modeViews: List<View> = emptyList()
+  private val listCard = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+  private val holder = FrameLayout(a)
+  private lateinit var mainScroll: View
+  private var subView: View? = null
+  private val subs = LinkedHashMap<String, LinearLayout>()
+  /** 一级列表里的入口行，点进去是二级页 */
+  private fun entry(title: String, desc: String, icon: Int, color: Int): LinearLayout {
+    val sub = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 0, 0, a.dp(32)) }; subs[title] = sub
+    if (listCard.childCount > 0) listCard.addView(View(a).apply { setBackgroundColor(LINE) }, LinearLayout.LayoutParams(-1, maxOf(1, a.dp(1) / 2)).apply { marginStart = a.dp(60) })
+    val r = LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL; minimumHeight = a.dp(60); setPadding(a.dp(14), a.dp(8), a.dp(14), a.dp(8))
+      background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(LINE), null, null); setOnClickListener { open(title) } }
+    r.addView(FrameLayout(a).apply { background = a.round(color, 8); addView(a.icon(icon, Color.WHITE, 18), FrameLayout.LayoutParams(a.dp(18), a.dp(18), android.view.Gravity.CENTER)) }, LinearLayout.LayoutParams(a.dp(32), a.dp(32)))
+    val c = col().apply { setPadding(a.dp(14), 0, a.dp(8), 0) }
+    c.addView(a.tv(title, 16f, TEXT1)); c.addView(a.tv(desc, 12f, TEXT2).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
+    r.addView(c, LinearLayout.LayoutParams(0, -2, 1f)); r.addView(a.tv("›", 22f, TEXT2))
+    listCard.addView(r); return sub
+  }
+  private fun open(title: String) {
+    val sub = subs[title] ?: return; lastTitle = title; subView?.let { holder.removeView(it); subView = null }; stopTest()
+    val page = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(BG); isClickable = true }
+    val bar = LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(a.dp(4), a.dp(6), a.dp(16), a.dp(2)) }
+    bar.addView(MaterialButton(a, null, com.google.android.material.R.attr.borderlessButtonStyle).apply { text = "‹ 我的"; textSize = 16f; setOnClickListener { back() } }, LinearLayout.LayoutParams(-2, a.dp(48)))
+    page.addView(bar)
+    page.addView(a.tv(title, 24f, TEXT1, true).apply { setPadding(a.dp(20), 0, 0, 0) })
+    (sub.parent as? android.view.ViewGroup)?.removeView(sub)
+    page.addView(ScrollView(a).apply { addView(sub); isVerticalScrollBarEnabled = false }, LinearLayout.LayoutParams(-1, 0, 1f))
+    val w = a.wide()
+    holder.addView(page, FrameLayout.LayoutParams(-1, -1).apply { if (w) marginStart = a.dp(MASTER) }); subView = page
+    if (w) { bar.visibility = View.GONE; page.setPadding(0, a.dp(12), 0, 0) }
+    page.translationX = a.resources.displayMetrics.widthPixels * 0.25f; page.alpha = 0f
+    page.animate().translationX(0f).alpha(1f).setDuration(200).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+    mainScroll.visibility = if (w) View.VISIBLE else View.INVISIBLE
+  }
+  /** 返回上一级；没有二级页时返回 false */
+  fun back(): Boolean { if (a.wide()) return false; val v = subView ?: return false; subView = null; mainScroll.visibility = View.VISIBLE
+    v.animate().translationX(a.resources.displayMetrics.widthPixels * 0.25f).alpha(0f).setDuration(160).withEndAction { holder.removeView(v) }.start(); stopTest(); return true }
+  fun openConn() = open("连接与账号")
+  private val MASTER = 360
+  private var wasWide = false
+  private var lastTitle = "连接与账号"
+  /** 大屏主从双栏：左列表固定 360dp，右侧显示二级页 */
+  private fun applyMaster() {
+    val w = a.wide()
+    mainScroll.layoutParams = FrameLayout.LayoutParams(if (w) a.dp(MASTER) else -1, -1)
+    if (w && subView == null) open(lastTitle)
+    else if (w) subView?.let { v -> (v.layoutParams as FrameLayout.LayoutParams).marginStart = a.dp(MASTER); v.requestLayout(); mainScroll.visibility = View.VISIBLE }
+    else if (wasWide) { subView?.let { holder.removeView(it) }; subView = null; mainScroll.visibility = View.VISIBLE }
+    wasWide = w
+  }
   override val view: View
   init {
     val root = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(0, a.dp(12), 0, a.dp(32)) }
@@ -73,9 +122,17 @@ class MinePage(a: MainActivity) : Page(a) {
     hc.addView(a.tv("大华录像机", 17f, TEXT1, true)); hc.addView(activeTv.apply { setPadding(0, a.dp(2), 0, 0); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
     hl.addView(hc, LinearLayout.LayoutParams(0, -2, 1f)); hl.addView(statusPill)
     head.addView(hl); root.addView(head, LinearLayout.LayoutParams(-1, -2).apply { setMargins(a.dp(16), a.dp(14), a.dp(16), 0) })
+    head.setOnClickListener { open("连接与账号") }
+    val lc = a.card(); lc.addView(listCard); root.addView(lc, LinearLayout.LayoutParams(-1, -2).apply { setMargins(a.dp(16), a.dp(20), a.dp(16), 0) })
+    root.addView(a.tv("常用：首页长按摄像头可收藏、改名、分组、看回放", 12f, TEXT2).apply { setPadding(a.dp(28), a.dp(10), a.dp(24), 0) })
+    val pConn = entry("连接与账号", "地址、端口、用户名密码、测试连接", R.drawable.ic_videocam, ACCENT)
+    val pPlay = entry("播放设置", "网络缓冲、屏幕常亮", R.drawable.ic_play, 0xFF007AFF.toInt())
+    val pSafe = entry("提醒与安全", "掉线提醒、应用锁", R.drawable.ic_lens, 0xFF34C759.toInt())
+    val pStore = entry("存储", "缩略图缓存、截图录像位置", R.drawable.ic_download, 0xFF8E8E93.toInt())
+    val pUpd = entry("更新与关于", "当前 v${BuildConfig.VERSION_NAME} · 检查更新", R.drawable.ic_loop, 0xFFAF52DE.toInt())
 
     // 连接
-    val s1 = section(root, "连接", "地址填录像机 IP 或域名，端口一般是 554。公网 IP 路由器重拨后可能会变。")
+    val s1 = section(pConn, "连接", "地址填录像机 IP 或域名，端口一般是 554。公网 IP 路由器重拨后可能会变。")
     var auto = Cfg.flag(a, "auto", true)
     switch(s1, "地址自适应", "按 公网 → 内网 → 域名 顺序检测，自动用第一个能连上的", auto) { _, c -> auto = c; Cfg.setFlag(a, "auto", c); updMode() }
     divider(s1)
@@ -100,7 +157,7 @@ class MinePage(a: MainActivity) : Page(a) {
     modeViews = listOf(manLbl, manual)
 
     // 账号
-    val s1b = section(root, "账号", "密码用系统密钥库加密，只保存在本机。")
+    val s1b = section(pConn, "账号", "密码用系统密钥库加密，只保存在本机。")
     val user = field(s1b, "用户名", Cfg.user(a), InputType.TYPE_CLASS_TEXT)
     val pw = field(s1b, "密码", Cfg.pass(a), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD, true)
     // 测试结果状态条
@@ -142,10 +199,10 @@ class MinePage(a: MainActivity) : Page(a) {
         p.play()
       }
     }
-    save.setOnClickListener { persist(); Thumbs.clear(a); stopTest(); videoBox.visibility = View.GONE; stBar.visibility = View.GONE; Toast.makeText(a, "已保存", Toast.LENGTH_SHORT).show(); a.goHome() }
+    save.setOnClickListener { persist(); Thumbs.clear(a); stopTest(); videoBox.visibility = View.GONE; stBar.visibility = View.GONE; back(); a.snack("已保存"); a.goHome() }
 
     // 播放
-    val s2 = section(root, "播放", "实时预览会记住上次的清晰度；移动数据下选高清会提醒流量。")
+    val s2 = section(pPlay, "播放", "实时预览会记住上次的清晰度；移动数据下选高清会提醒流量。")
     val cacheLbl = a.tv("", 15f, TEXT1).apply { setPadding(0, a.dp(10), 0, 0) }
     fun cl(v: Int) { cacheLbl.text = "网络缓冲  ${v} ms" + if (v < 600) "  · 低延迟" else if (v <= 1500) "  · 均衡" else "  · 更流畅" }
     cl(Cfg.caching(a)); s2.addView(cacheLbl)
@@ -155,7 +212,7 @@ class MinePage(a: MainActivity) : Page(a) {
     switch(s2, "保持屏幕常亮", "实时预览和回放时不自动锁屏", Cfg.flag(a, "keep", true)) { _, c -> Cfg.setFlag(a, "keep", c) }
 
     // 提醒与安全
-    val s3 = section(root, "提醒与安全")
+    val s3 = section(pSafe, "提醒与安全")
     switch(s3, "掉线提醒", "约每 15 分钟检测一次，连不上或恢复时通知你（仅端口检测，省电）", Cfg.flag(a, "notify", false)) { _, c ->
       Cfg.setFlag(a, "notify", c); Net.schedule(a, c)
       if (c && Build.VERSION.SDK_INT >= 33) a.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 9) }
@@ -166,15 +223,15 @@ class MinePage(a: MainActivity) : Page(a) {
       else { Cfg.setFlag(a, "lock", c); MainActivity.unlocked = true } }
 
     // 存储
-    val s4 = section(root, "存储", "截图在 相册/图片/大华监控截图；录像在 相册/Movies/大华监控。")
+    val s4 = section(pStore, "存储", "截图在 相册/图片/大华监控截图；录像在 相册/Movies/大华监控。")
     val srow = LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, a.dp(8), 0, 0) }
     srow.addView(cacheTv, LinearLayout.LayoutParams(0, -2, 1f))
     srow.addView(tonalBtn().apply { text = "清除"; cornerRadius = a.dp(12)
-      setOnClickListener { Thumbs.clear(a); updCache(); Toast.makeText(a, "缓存已清除", Toast.LENGTH_SHORT).show() } }, LinearLayout.LayoutParams(-2, a.dp(44)))
+      setOnClickListener { Thumbs.clear(a); updCache(); a.snack("缓存已清除") } }, LinearLayout.LayoutParams(-2, a.dp(44)))
     s4.addView(srow)
 
     // 更新
-    val s5 = section(root, "更新")
+    val s5 = section(pUpd, "更新")
     val vrow = LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, a.dp(8), 0, 0) }
     vrow.addView(a.tv("当前版本", 15f, TEXT1), LinearLayout.LayoutParams(0, -2, 1f)); vrow.addView(a.tv("v${BuildConfig.VERSION_NAME}", 15f, TEXT2))
     s5.addView(vrow)
@@ -189,10 +246,11 @@ class MinePage(a: MainActivity) : Page(a) {
       LinearLayout.LayoutParams(-1, a.dp(50)).apply { topMargin = a.dp(12) })
 
     // 关于
-    val s6 = section(root, "关于")
+    val s6 = section(pUpd, "关于")
     val ab = col(); ab.addView(a.tv("开源的大华录像机手机查看工具，RTSP（TCP）直连录像机。支持实时预览、录像回放、轮巡、分组、电子放大、本地录像、掉线提醒、在线更新。\n项目地址：github.com/${Updater.REPO}", 12f, TEXT2).apply { setPadding(0, a.dp(4), 0, a.dp(4)); setLineSpacing(0f, 1.2f) })
     fold(s6, "大华监控 v${BuildConfig.VERSION_NAME}", ab)
-    view = ScrollView(a).apply { addView(root); isVerticalScrollBarEnabled = false }
+    mainScroll = ScrollView(a).apply { addView(root); isVerticalScrollBarEnabled = false }
+    holder.addView(mainScroll, FrameLayout.LayoutParams(-1, -1)); view = holder
     updMode()
   }
   private fun updMode() { val auto = Cfg.flag(a, "auto", true); modeViews.forEach { it.visibility = if (auto) View.GONE else View.VISIBLE }; updActive(null, true) }
@@ -204,6 +262,6 @@ class MinePage(a: MainActivity) : Page(a) {
   }
   private fun updCache() { cacheTv.text = "缩略图缓存  %.1f MB".format(Thumbs.size(a) / 1048576.0) }
   private fun stopTest() { tp?.let { it.setEventListener(null); it.stop(); it.detachViews(); it.release() }; tp = null }
-  override fun onShow() { updCache(); updActive(null, true); if (Cfg.configured(a)) a.checkOnline { updActive(it) } }
+  override fun onShow() { applyMaster(); updCache(); updActive(null, true); if (Cfg.configured(a)) a.checkOnline { updActive(it) } }
   override fun onHide() { stopTest() }
 }

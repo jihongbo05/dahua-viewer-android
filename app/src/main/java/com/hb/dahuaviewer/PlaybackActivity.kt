@@ -41,6 +41,7 @@ class PlaybackActivity : AppCompatActivity() {
     ch = intent.getIntExtra("ch", 1)
     if (Cfg.flag(this, "keep", true)) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     val start = Calendar.getInstance().apply { add(Calendar.HOUR_OF_DAY, -1) }
+    start.timeInMillis = intent.getLongExtra("t", start.timeInMillis)
     if (b != null) start.timeInMillis = b.getLong("t", start.timeInMillis)
     day.time = start.time; zero(day); openAt = start.time
     val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(BG) }
@@ -50,7 +51,8 @@ class PlaybackActivity : AppCompatActivity() {
     videoBox = Ratio(this).apply { setBackgroundColor(Color.BLACK) }
     tile = Tile(this, showLabel = false).apply { showInfo = true; zoomable = true; autoReconnect = false; onEnd = { setPlayUi(false) } }
     videoBox.addView(tile, FrameLayout.LayoutParams(-1, -1)); root.addView(videoBox, LinearLayout.LayoutParams(-1, -2))
-    tile.onDouble = { if (tile.zoomed) tile.resetZoom() else requestedOrientation = if (isLand()) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE }
+    tile.onDouble = { tile.toggleZoom() }
+    tile.onTap = { if (!wide()) requestedOrientation = if (isLand()) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE }
 
     val bl = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), 0, dp(8), dp(8)) }
     val c1 = card(); val l1 = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(12), dp(16), dp(12)) }; c1.addView(l1)
@@ -60,18 +62,35 @@ class PlaybackActivity : AppCompatActivity() {
     timeBtn = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle)
     row.addView(dateBtn, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(8) }); row.addView(timeBtn, LinearLayout.LayoutParams(0, -2, 1f))
     l1.addView(row)
+    // 日期条：最近 7 天，一键切换
+    val days = LinearLayout(this)
+    val dayBtns = mutableListOf<TextView>()
+    fun paintDays() { dayBtns.forEach { b -> val on = (b.tag as Long) == day.timeInMillis
+      b.setTextColor(if (on) Color.WHITE else TEXT1); b.background = round(if (on) ACCENT else FILL, 12) } }
+    for (i in 6 downTo 0) { val c = Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -i) }; zero(c)
+      val lbl = when (i) { 0 -> "今天"; 1 -> "昨天"; else -> SimpleDateFormat("M/d", Locale.CHINA).format(c.time) }
+      val wk = arrayOf("日", "一", "二", "三", "四", "五", "六")[c.get(Calendar.DAY_OF_WEEK) - 1]
+      val b = TextView(this).apply { text = "$lbl\n周$wk"; textSize = 12f; gravity = Gravity.CENTER; tag = c.timeInMillis
+        setOnClickListener { val m = slider.value.toLong(); day.timeInMillis = tag as Long; open(Date(day.timeInMillis + m * 60_000)); paintDays() } }
+      dayBtns += b; days.addView(b, LinearLayout.LayoutParams(0, dp(48), 1f).apply { setMargins(dp(2), dp(8), dp(2), dp(4)) }) }
+    l1.addView(days); dayPaint = { paintDays() }
     slider = Slider(this).apply { valueFrom = 0f; valueTo = 1439f; stepSize = 1f
       setLabelFormatter { v -> "%02d:%02d".format(v.toInt() / 60, v.toInt() % 60) }
       addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
         override fun onStartTrackingTouch(s: Slider) { dragging = true }
         override fun onStopTrackingTouch(s: Slider) { dragging = false; open(Date(day.timeInMillis + s.value.toLong() * 60_000)) } }) }
     l1.addView(slider)
-    l1.addView(tv("拖动时间轴或选时间跳转（每次跳转会重新连接录像机）", 11f, TEXT2).apply { gravity = Gravity.CENTER })
+    l1.addView(tv("拖动时间轴或点日期/时间跳转（每次跳转会重新连接录像机）", 11f, TEXT2).apply { gravity = Gravity.CENTER })
+    val quick = com.google.android.material.chip.ChipGroup(this).apply { setPadding(0, dp(6), 0, 0) }
+    listOf<Pair<String, () -> Long>>("最近30分钟" to { System.currentTimeMillis() - 30 * 60_000L }, "最近1小时" to { System.currentTimeMillis() - 3600_000L },
+      "今天凌晨起" to { Calendar.getInstance().apply { zero(this) }.timeInMillis }).forEach { (t, f) ->
+      quick.addView(com.google.android.material.chip.Chip(this).apply { text = t; setOnClickListener { open(Date(f())) } }) }
+    l1.addView(quick)
     bl.addView(c1)
     val ctl = LinearLayout(this).apply { gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(4)) }
     fun rb(res: Int, label: String, f: () -> Unit): Pair<ImageView, TextView> {
       val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setOnClickListener { f() } }
-      val circle = FrameLayout(this).apply { background = round(0xFFFFF1E8.toInt(), 26) }
+      val circle = FrameLayout(this).apply { background = round(soft(ACCENT, 0x22), 26) }
       val ic = icon(res, ACCENT); circle.addView(ic, FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
       col.addView(circle, LinearLayout.LayoutParams(dp(52), dp(52)))
       val t = tv(label, 12f, TEXT1).apply { setPadding(0, dp(6), 0, 0) }; col.addView(t)
@@ -111,7 +130,7 @@ class PlaybackActivity : AppCompatActivity() {
     tile.customUrl = Cfg.playUrl(this, ch, st, end)
     tile.play(ch, 0); tile.setRate(rate)
     if (Net.cellular(this)) Toast.makeText(this, "当前为移动数据：回放是高清主码流，流量较大", Toast.LENGTH_SHORT).show()
-    setPlayUi(true); updClock()
+    setPlayUi(true); updClock(); dayPaint()
   }
   private fun setPlayUi(playing: Boolean) { playIcon.setImageResource(if (playing) R.drawable.ic_pause else R.drawable.ic_play); playLbl.text = if (playing) "暂停" else "播放" }
   private fun togglePlay() {
@@ -147,15 +166,17 @@ class PlaybackActivity : AppCompatActivity() {
       runOnUiThread { Toast.makeText(this, if (ok) "片段已保存到 相册/Movies/大华监控" else "片段保存失败", Toast.LENGTH_LONG).show() } }.start() }, 800)
   }
   private fun shot() {
-    val bmp = tile.snapshot() ?: run { Toast.makeText(this, "暂无画面", Toast.LENGTH_SHORT).show(); return }
+    val bmp = tile.snapshot() ?: run { snack("还没出画面，稍等再截"); return }
     try { Saver.image(this, bmp, "回放_通道${ch}_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.CHINA).format(Date(pos())) + ".jpg")
-      Toast.makeText(this, "已保存到相册：图片/大华监控截图", Toast.LENGTH_SHORT).show() } catch (e: Exception) { Toast.makeText(this, "截图失败：${e.message}", Toast.LENGTH_LONG).show() }
+      snack("截图已保存到相册") } catch (e: Exception) { Toast.makeText(this, "截图失败：${e.message}", Toast.LENGTH_LONG).show() }
   }
-  private fun isLand() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+  private var dayPaint: () -> Unit = {}
+  private fun isLand() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE && !wide()
   override fun onConfigurationChanged(c: Configuration) { super.onConfigurationChanged(c); applyOrientation() }
   @Suppress("DEPRECATION")
   private fun applyOrientation() {
     val land = isLand(); videoBox.enabledRatio = !land
+    videoBox.maxH = if (wide()) (resources.displayMetrics.heightPixels * 0.55f).toInt() else Int.MAX_VALUE
     videoBox.layoutParams = LinearLayout.LayoutParams(-1, if (land) -1 else -2)
     below.visibility = if (land) View.GONE else View.VISIBLE; topBar.visibility = below.visibility
     window.decorView.systemUiVisibility = if (land) View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY else 0
