@@ -37,13 +37,13 @@ class PlaybackActivity : AppCompatActivity() {
   private val full = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.CHINA)
 
   override fun onCreate(b: Bundle?) {
-    super.onCreate(b)
+    initTheme(this); super.onCreate(b)
     ch = intent.getIntExtra("ch", 1)
     if (Cfg.flag(this, "keep", true)) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     val start = Calendar.getInstance().apply { add(Calendar.HOUR_OF_DAY, -1) }
     if (b != null) start.timeInMillis = b.getLong("t", start.timeInMillis)
     day.time = start.time; zero(day); openAt = start.time
-    val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(getColor(R.color.bg)) }
+    val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(BG) }
     val bar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setBackgroundColor(Color.BLACK); setPadding(dp(4), dp(4), dp(16), dp(4)) }
     bar.addView(ImageButton(this).apply { setImageResource(R.drawable.ic_back); setColorFilter(Color.WHITE); setBackgroundColor(0); setOnClickListener { finish() } }, LinearLayout.LayoutParams(dp(48), dp(48)))
     bar.addView(tv("录像回放 · ${Cfg.name(this, ch)}", 17f, Color.WHITE, true)); topBar = bar; root.addView(bar)

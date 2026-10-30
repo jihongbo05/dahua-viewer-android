@@ -54,10 +54,10 @@ class PreviewActivity : AppCompatActivity() {
   }
 
   override fun onCreate(b: Bundle?) {
-    super.onCreate(b)
+    initTheme(this); super.onCreate(b)
     ch = b?.getInt("ch") ?: intent.getIntExtra("ch", 1); sub = b?.getInt("sub") ?: Cfg.lastSub(this)
     if (Cfg.flag(this, "keep", true)) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-    val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(getColor(R.color.bg)) }
+    val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(BG) }
     val bar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setBackgroundColor(Color.BLACK); setPadding(dp(4), dp(4), dp(16), dp(4)) }
     bar.addView(ImageButton(this).apply { setImageResource(R.drawable.ic_back); setColorFilter(Color.WHITE); setBackgroundColor(0); setOnClickListener { finish() } }, LinearLayout.LayoutParams(dp(48), dp(48)))
     title = tv("", 17f, Color.WHITE, true); bar.addView(title); topBar = bar
@@ -67,10 +67,10 @@ class PreviewActivity : AppCompatActivity() {
     videoBox.addView(tile, FrameLayout.LayoutParams(-1, -1))
     root.addView(videoBox, LinearLayout.LayoutParams(-1, -2))
     val bl = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    val ctl = LinearLayout(this).apply { setPadding(0, dp(20), 0, dp(12)); gravity = Gravity.CENTER; setBackgroundColor(Color.WHITE) }
+    val ctl = LinearLayout(this).apply { setPadding(0, dp(20), 0, dp(12)); gravity = Gravity.CENTER; setBackgroundColor(SURFACE) }
     fun rb(res: Int, label: String, f: () -> Unit): TextView {
       val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setOnClickListener { f() } }
-      val circle = FrameLayout(this).apply { background = round(0xFFFFF1E8.toInt(), 28) }
+      val circle = FrameLayout(this).apply { background = round(soft(ACCENT, 0x22), 28) }
       circle.addView(icon(res, ACCENT), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
       col.addView(circle, LinearLayout.LayoutParams(dp(56), dp(56)))
       val t = tv(label, 12f, TEXT1).apply { setPadding(0, dp(6), 0, 0) }; col.addView(t)
@@ -121,7 +121,7 @@ class PreviewActivity : AppCompatActivity() {
     override fun onCreateViewHolder(p: ViewGroup, t: Int): RecyclerView.ViewHolder {
       val c = card().apply { layoutParams = RecyclerView.LayoutParams(dp(140), -2) }
       val col = LinearLayout(this@PreviewActivity).apply { orientation = LinearLayout.VERTICAL }
-      val r = Ratio(this@PreviewActivity).apply { setBackgroundColor(0xFFE9ECEF.toInt()) }
+      val r = Ratio(this@PreviewActivity).apply { setBackgroundColor(FILL) }
       r.addView(icon(R.drawable.ic_videocam, 0xFFB0B6BE.toInt(), 28), FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER))
       r.addView(ImageView(this@PreviewActivity).apply { scaleType = ImageView.ScaleType.CENTER_CROP; tag = "img" }, FrameLayout.LayoutParams(-1, -1))
       col.addView(r); col.addView(tv("", 12f, TEXT1).apply { maxLines = 1; tag = "name"; setPadding(dp(8), dp(6), dp(8), dp(8)) })

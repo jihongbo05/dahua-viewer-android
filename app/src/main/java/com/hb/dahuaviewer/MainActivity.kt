@@ -40,13 +40,13 @@ class MainActivity : AppCompatActivity() {
   private var cur: Page? = null
 
   override fun onCreate(b: Bundle?) {
-    setTheme(R.style.Theme_App)
+    setTheme(R.style.Theme_App); initTheme(this)
     super.onCreate(b)
     val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     content = FrameLayout(this)
     val thumbHost = FrameLayout(this); content.addView(thumbHost, FrameLayout.LayoutParams(-1, -1)); Thumbs.host = thumbHost
     nav = BottomNavigationView(this).apply {
-      setBackgroundColor(Color.WHITE); elevation = dp(8).toFloat()
+      setBackgroundColor(SURFACE); elevation = 0f; itemActiveIndicatorColor = android.content.res.ColorStateList.valueOf(soft(ACCENT, 0x2E))
       menu.add(0, 1, 0, "首页").setIcon(R.drawable.ic_home)
       menu.add(0, 2, 1, "全部画面").setIcon(R.drawable.ic_grid)
       menu.add(0, 3, 2, "我的").setIcon(R.drawable.ic_person)
@@ -54,7 +54,7 @@ class MainActivity : AppCompatActivity() {
     root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f)); root.addView(nav)
     setContentView(root)
     home = HomePage(this); all = AllPage(this); mine = MinePage(this)
-    for (pg in listOf(home, all, mine)) { pg.view.setBackgroundColor(getColor(R.color.bg)); pg.view.visibility = View.GONE; content.addView(pg.view, FrameLayout.LayoutParams(-1, -1)) }
+    for (pg in listOf(home, all, mine)) { pg.view.setBackgroundColor(BG); pg.view.visibility = View.GONE; content.addView(pg.view, FrameLayout.LayoutParams(-1, -1)) }
     nav.setOnItemSelectedListener { select(it.itemId); true }
     Updater.autoCheck(this)
     if (Cfg.configured(this)) nav.selectedItemId = 1 else { nav.selectedItemId = 3; Toast.makeText(this, "首次使用，请先填写连接信息", Toast.LENGTH_LONG).show() }
@@ -118,7 +118,7 @@ class MainActivity : AppCompatActivity() {
   override fun onStop() { super.onStop(); bgAt = System.currentTimeMillis() }
   private fun showLock() {
     if (lockView == null) {
-      val v = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setBackgroundColor(getColor(R.color.bg)); isClickable = true
+      val v = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setBackgroundColor(BG); isClickable = true
         addView(icon(R.drawable.ic_videocam, ACCENT, 64)); addView(tv("大华监控已锁定", 18f, TEXT1, true).apply { setPadding(0, dp(12), 0, dp(16)) })
         addView(MaterialButton(this@MainActivity).apply { text = "解锁"; setOnClickListener { auth() } }) }
       (window.decorView as ViewGroup).addView(v, ViewGroup.LayoutParams(-1, -1)); lockView = v
@@ -142,7 +142,7 @@ abstract class Page(val a: MainActivity) { abstract val view: View; open fun onS
 class HomePage(a: MainActivity) : Page(a) {
   private val chip = Chip(a).apply { text = "检测中"; isClickable = false; chipStrokeWidth = 0f; textSize = 12f }
   private val search = EditText(a).apply {
-    hint = "搜索名称或通道号"; textSize = 14f; setSingleLine(); background = a.round(Color.WHITE, 22)
+    hint = "搜索名称或通道号"; textSize = 14f; setSingleLine(); background = a.round(SURFACE, 12); setTextColor(TEXT1); setHintTextColor(TEXT2)
     setPadding(a.dp(14), 0, a.dp(14), 0); compoundDrawablePadding = a.dp(8)
     setCompoundDrawablesRelativeWithIntrinsicBounds(a.drw(R.drawable.ic_search).mutate().apply { setTint(TEXT2) }, null, null, null)
   }
@@ -157,9 +157,9 @@ class HomePage(a: MainActivity) : Page(a) {
   override val view: View = LinearLayout(a).apply {
     orientation = LinearLayout.VERTICAL
     val top = LinearLayout(a).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(a.dp(16), a.dp(12), a.dp(16), a.dp(4)) }
-    top.addView(a.tv("大华监控", 22f, TEXT1, true), LinearLayout.LayoutParams(0, -2, 1f)); top.addView(chip)
+    top.addView(a.tv("大华监控", 28f, TEXT1, true), LinearLayout.LayoutParams(0, -2, 1f)); top.addView(chip)
     addView(top)
-    addView(search, LinearLayout.LayoutParams(-1, a.dp(44)).apply { setMargins(a.dp(16), a.dp(8), a.dp(16), a.dp(4)) })
+    addView(search, LinearLayout.LayoutParams(-1, a.dp(46)).apply { setMargins(a.dp(16), a.dp(8), a.dp(16), a.dp(4)) })
     addView(HorizontalScrollView(a).apply { isHorizontalScrollBarEnabled = false; addView(chips) }, LinearLayout.LayoutParams(-1, -2).apply { setMargins(a.dp(12), 0, a.dp(12), 0) })
     addView(swipe, LinearLayout.LayoutParams(-1, 0, 1f))
   }
@@ -182,11 +182,11 @@ class HomePage(a: MainActivity) : Page(a) {
       override fun afterTextChanged(s: Editable?) { rebuild() }
     })
   }
-  private fun check() { chip.text = "检测中"; chip.setChipBackgroundColorResource(android.R.color.white)
+  private fun check() { chip.text = "● 检测中"; chip.setTextColor(TEXT2); chip.chipBackgroundColor = android.content.res.ColorStateList.valueOf(FILL)
     a.checkOnline { pr -> val ok = pr != null; chip.text = if (ok) "● 在线 · ${pr!!.label}" else "● 离线"
-      if (!ok) Toast.makeText(a, "所有地址都连不上：可能公网IP变了或网络断开，请到「我的」检查", Toast.LENGTH_LONG).show()
-      chip.setTextColor(if (ok) 0xFF1E9E4A.toInt() else 0xFFD93025.toInt())
-      chip.chipBackgroundColor = android.content.res.ColorStateList.valueOf(if (ok) 0xFFE6F6EC.toInt() else 0xFFFDECEA.toInt()) } }
+      if (!ok) Toast.makeText(a, "连不上录像机：网络断开或公网地址变了，可到「我的 → 连接」检查", Toast.LENGTH_LONG).show()
+      chip.setTextColor(if (ok) OK else ERR)
+      chip.chipBackgroundColor = android.content.res.ColorStateList.valueOf(soft(if (ok) OK else ERR)) } }
   fun rebuild() {
     val q = search.text.toString().trim()
     val base = when (filter) { "全部" -> (1..Cfg.COUNT).toList(); "收藏" -> Cfg.favs(a).sorted(); else -> Cfg.groupChs(a, filter) }
@@ -210,9 +210,10 @@ class HomePage(a: MainActivity) : Page(a) {
     override fun getItemCount() = items.size
     override fun getItemViewType(p: Int) = when (items[p]) { is Int -> 1; is String -> 0; else -> 2 }
     override fun onCreateViewHolder(p: ViewGroup, t: Int): RecyclerView.ViewHolder = when (t) {
-      1 -> CamVH(); 0 -> object : RecyclerView.ViewHolder(a.tv("", 15f, TEXT1, true).apply { setPadding(a.dp(8), a.dp(14), a.dp(8), a.dp(4)) }) {}
+      1 -> CamVH(); 0 -> object : RecyclerView.ViewHolder(a.tv("", 13f, TEXT2, true).apply { setPadding(a.dp(10), a.dp(18), a.dp(8), a.dp(6)); letterSpacing = 0.04f }) {}
       else -> object : RecyclerView.ViewHolder(LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(0, a.dp(60), 0, a.dp(60))
-        addView(a.icon(R.drawable.ic_videocam, 0xFFC4C8CF.toInt(), 56)); addView(a.tv("", 14f, TEXT2).apply { setPadding(0, a.dp(8), 0, 0) }) }) {}
+        addView(FrameLayout(a).apply { background = a.round(FILL, 40); addView(a.icon(R.drawable.ic_videocam, TEXT2, 40), FrameLayout.LayoutParams(a.dp(40), a.dp(40), Gravity.CENTER)) }, LinearLayout.LayoutParams(a.dp(80), a.dp(80)))
+        addView(a.tv("", 14f, TEXT2).apply { setPadding(a.dp(32), a.dp(14), a.dp(32), 0); gravity = Gravity.CENTER }) }) {}
     }
     override fun onBindViewHolder(vh: RecyclerView.ViewHolder, p: Int) {
       when (val it = items[p]) {
@@ -231,7 +232,7 @@ class HomePage(a: MainActivity) : Page(a) {
     private val dotV = a.dot(TEXT2)
     init {
       val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-      val r = Ratio(a).apply { setBackgroundColor(0xFFE9ECEF.toInt()) }
+      val r = Ratio(a).apply { setBackgroundColor(FILL) }
       r.addView(ph, FrameLayout.LayoutParams(a.dp(36), a.dp(36), Gravity.CENTER)); r.addView(img, FrameLayout.LayoutParams(-1, -1))
       r.addView(star, FrameLayout.LayoutParams(a.dp(18), a.dp(18), Gravity.TOP or Gravity.END).apply { setMargins(0, a.dp(8), a.dp(8), 0) })
       col.addView(r)
@@ -239,13 +240,14 @@ class HomePage(a: MainActivity) : Page(a) {
       row.addView(dotV); row.addView(name, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = a.dp(6) })
       col.addView(row); col.addView(sub.apply { setPadding(a.dp(26), a.dp(2), a.dp(12), a.dp(12)) })
       (itemView as ViewGroup).addView(col)
+      itemView.layoutParams = RecyclerView.LayoutParams(-1, -2).apply { setMargins(a.dp(6), a.dp(6), a.dp(6), a.dp(6)) }
     }
     fun bind(ch: Int) {
       name.text = Cfg.name(a, ch); sub.text = "通道 $ch"
       val bmp = Thumbs.load(a, ch); img.setImageBitmap(bmp); img.visibility = if (bmp == null) View.GONE else View.VISIBLE
       star.visibility = if (Cfg.isFav(a, ch)) View.VISIBLE else View.GONE
       val on = Thumbs.online[ch]
-      (dotV.background as android.graphics.drawable.GradientDrawable).setColor(when (on) { true -> 0xFF1E9E4A.toInt(); false -> 0xFFD93025.toInt(); null -> 0xFFC4C8CF.toInt() })
+      (dotV.background as android.graphics.drawable.GradientDrawable).setColor(when (on) { true -> OK; false -> ERR; null -> LINE })
       sub.text = "通道 $ch · " + when (on) { true -> "在线"; false -> "离线"; null -> "未检测" }
       itemView.setOnClickListener { a.openPreview(ch) }
       itemView.setOnLongClickListener { a.camMenu(itemView, ch) { rebuild() }; true }
@@ -269,7 +271,7 @@ class AllPage(a: MainActivity) : Page(a) {
   private val patrolBtn = MaterialButton(a, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { setIconResource(R.drawable.ic_loop) }
   override val view: View = LinearLayout(a).apply {
     orientation = LinearLayout.VERTICAL
-    addView(a.tv("全部画面", 22f, TEXT1, true).apply { setPadding(a.dp(16), a.dp(12), a.dp(16), a.dp(8)) })
+    addView(a.tv("全部画面", 28f, TEXT1, true).apply { setPadding(a.dp(16), a.dp(12), a.dp(16), a.dp(8)) })
     val ids = mapOf(1 to "单画面", 4 to "4分屏", 9 to "9分屏", 0 to "全部")
     for ((n, t) in ids) group.addView(MaterialButton(a, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { id = 100 + n; text = t; textSize = 13f },
       LinearLayout.LayoutParams(0, -2, 1f))
@@ -308,9 +310,9 @@ class AllPage(a: MainActivity) : Page(a) {
   }
   private fun drawDots() {
     dots.removeAllViews()
-    for (i in 0 until pages) dots.addView(a.dot(if (i == page) ACCENT else 0xFFCFD3D9.toInt()).apply {
+    for (i in 0 until pages) dots.addView(a.dot(if (i == page) ACCENT else LINE).apply {
       layoutParams = LinearLayout.LayoutParams(a.dp(if (i == page) 16 else 6), a.dp(6)).apply { setMargins(a.dp(3), 0, a.dp(3), 0) }
-      background = a.round(if (i == page) ACCENT else 0xFFCFD3D9.toInt(), 3) })
+      background = a.round(if (i == page) ACCENT else LINE, 3) })
   }
   private fun go(d: Int) { page = (page + d + pages) % pages; onHide(); onShow() }
   private fun showGrid() {

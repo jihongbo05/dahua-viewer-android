@@ -15,66 +15,109 @@ import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.util.VLCVideoLayout
 
 class MinePage(a: MainActivity) : Page(a) {
-  private fun field(parent: LinearLayout, hint: String, v: String, type: Int, pwd: Boolean = false, weight: Float = 0f, row: LinearLayout? = null): TextInputEditText {
-    val til = TextInputLayout(a).apply { this.hint = hint; boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
-      val r = a.dp(12).toFloat(); setBoxCornerRadii(r, r, r, r); if (pwd) endIconMode = TextInputLayout.END_ICON_PASSWORD_TOGGLE }
+  private val outlined = com.google.android.material.R.attr.materialButtonOutlinedStyle
+  private fun tonalBtn() = MaterialButton(a).apply { backgroundTintList = android.content.res.ColorStateList.valueOf(soft(ACCENT, 0x24)); setTextColor(ACCENT); elevation = 0f; stateListAnimator = null }
+  /** 紧凑输入框：浅灰填充、圆角 10、高 46dp */
+  private fun box(hint: String, v: String, type: Int) = EditText(a).apply {
+    this.hint = hint; setText(v); inputType = type; setSingleLine(); textSize = 15f; setTextColor(TEXT1); setHintTextColor(TEXT2)
+    background = a.round(FILL, 10); setPadding(a.dp(12), 0, a.dp(12), 0); minHeight = a.dp(46) }
+  private fun field(parent: LinearLayout, hint: String, v: String, type: Int, pwd: Boolean = false): TextInputEditText {
+    val til = TextInputLayout(a).apply { this.hint = hint; boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE; boxStrokeColor = ACCENT
+      val r = a.dp(10).toFloat(); setBoxCornerRadii(r, r, r, r); if (pwd) endIconMode = TextInputLayout.END_ICON_PASSWORD_TOGGLE }
     val et = TextInputEditText(til.context).apply { setText(v); inputType = type; setSingleLine() }
-    til.addView(et)
-    if (row != null) row.addView(til, LinearLayout.LayoutParams(0, -2, weight).apply { marginEnd = a.dp(6) })
-    else parent.addView(til, LinearLayout.LayoutParams(-1, -2).apply { topMargin = a.dp(8) })
-    return et
+    til.addView(et); parent.addView(til, LinearLayout.LayoutParams(-1, -2).apply { topMargin = a.dp(10) }); return et
   }
-  private fun section(root: LinearLayout, title: String): LinearLayout {
-    val c = a.card(); val l = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(a.dp(16), a.dp(14), a.dp(16), a.dp(16)) }
-    l.addView(a.tv(title, 16f, TEXT1, true)); c.addView(l)
-    root.addView(c, LinearLayout.LayoutParams(-1, -2).apply { setMargins(a.dp(8), a.dp(4), a.dp(8), a.dp(4)) }); return l
+  /** iOS 风格分组：卡片外灰色小标题 + 卡片 + 卡片下说明 */
+  private fun section(root: LinearLayout, title: String, footer: String? = null): LinearLayout {
+    root.addView(a.tv(title, 13f, TEXT2, true).apply { setPadding(a.dp(28), a.dp(22), a.dp(16), a.dp(8)); letterSpacing = 0.04f })
+    val c = a.card(); val l = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(a.dp(16), a.dp(6), a.dp(16), a.dp(14)) }
+    c.addView(l); root.addView(c, LinearLayout.LayoutParams(-1, -2).apply { setMargins(a.dp(16), 0, a.dp(16), 0) })
+    footer?.let { root.addView(a.tv(it, 12f, TEXT2).apply { setPadding(a.dp(28), a.dp(6), a.dp(24), 0); setLineSpacing(0f, 1.15f) }) }
+    return l
   }
+  private fun divider(parent: LinearLayout) = parent.addView(View(a).apply { setBackgroundColor(LINE) }, LinearLayout.LayoutParams(-1, maxOf(1, a.dp(1) / 2)).apply { topMargin = a.dp(8) })
   private fun switch(parent: LinearLayout, title: String, desc: String, on: Boolean, f: (MaterialSwitch, Boolean) -> Unit) {
-    val row = LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, a.dp(10), 0, 0) }
+    if (parent.childCount > 0) divider(parent)
+    val row = LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL; minimumHeight = a.dp(52); setPadding(0, a.dp(8), 0, 0) }
     val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-    col.addView(a.tv(title, 14f)); col.addView(a.tv(desc, 12f, TEXT2))
+    col.addView(a.tv(title, 15f, TEXT1)); col.addView(a.tv(desc, 12f, TEXT2).apply { setPadding(0, a.dp(2), a.dp(8), 0) })
     row.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
     val sw = MaterialSwitch(a).apply { isChecked = on }; sw.setOnCheckedChangeListener { v, c -> f(v as MaterialSwitch, c) }
-    row.addView(sw); parent.addView(row)
+    row.addView(sw); row.setOnClickListener { sw.toggle() }; parent.addView(row)
   }
+  /** 可折叠行：点标题展开/收起 */
+  private fun fold(parent: LinearLayout, title: String, body: LinearLayout) {
+    if (parent.childCount > 0) divider(parent)
+    val arrow = a.tv("›", 20f, TEXT2)
+    val row = LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL; minimumHeight = a.dp(48); setPadding(0, a.dp(6), 0, 0) }
+    row.addView(a.tv(title, 15f, TEXT1), LinearLayout.LayoutParams(0, -2, 1f)); row.addView(arrow)
+    body.visibility = View.GONE
+    row.setOnClickListener { val open = body.visibility != View.VISIBLE; body.visibility = if (open) View.VISIBLE else View.GONE; arrow.animate().rotation(if (open) 90f else 0f).setDuration(150).start() }
+    parent.addView(row); parent.addView(body)
+  }
+  private fun col() = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
   private var tp: MediaPlayer? = null
-  private val cacheTv = a.tv("", 13f, TEXT2)
-  private val activeTv = a.tv("", 13f, TEXT2)
+  private val cacheTv = a.tv("", 15f, TEXT1)
+  private val activeTv = a.tv("", 12f, TEXT2)
+  private val statusPill = a.pill("未检测", TEXT2)
   private var modeViews: List<View> = emptyList()
   override val view: View
   init {
-    val root = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(a.dp(8), a.dp(12), a.dp(8), a.dp(24)) }
-    root.addView(a.tv("我的", 22f, TEXT1, true).apply { setPadding(a.dp(8), 0, 0, a.dp(8)) })
-    val s1 = section(root, "连接地址")
+    val root = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(0, a.dp(12), 0, a.dp(32)) }
+    root.addView(a.tv("我的", 28f, TEXT1, true).apply { setPadding(a.dp(20), 0, 0, 0) })
+
+    // 顶部状态卡
+    val head = a.card(); val hl = LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(a.dp(16), a.dp(16), a.dp(16), a.dp(16)) }
+    hl.addView(FrameLayout(a).apply { background = a.round(soft(ACCENT, 0x26), 14); addView(a.icon(R.drawable.ic_videocam, ACCENT, 26), FrameLayout.LayoutParams(a.dp(26), a.dp(26), android.view.Gravity.CENTER)) }, LinearLayout.LayoutParams(a.dp(48), a.dp(48)))
+    val hc = col().apply { setPadding(a.dp(12), 0, a.dp(8), 0) }
+    hc.addView(a.tv("大华录像机", 17f, TEXT1, true)); hc.addView(activeTv.apply { setPadding(0, a.dp(2), 0, 0); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
+    hl.addView(hc, LinearLayout.LayoutParams(0, -2, 1f)); hl.addView(statusPill)
+    head.addView(hl); root.addView(head, LinearLayout.LayoutParams(-1, -2).apply { setMargins(a.dp(16), a.dp(14), a.dp(16), 0) })
+
+    // 连接
+    val s1 = section(root, "连接", "地址填录像机 IP 或域名，端口一般是 554。公网 IP 路由器重拨后可能会变。")
     var auto = Cfg.flag(a, "auto", true)
-    switch(s1, "地址自适应", "按 公网 → 内网 → 域名 顺序快速检测（2秒），自动用第一个能连上的", auto) { _, c -> auto = c; Cfg.setFlag(a, "auto", c); updMode() }
-    s1.addView(activeTv.apply { setPadding(0, a.dp(8), 0, 0) })
+    switch(s1, "地址自适应", "按 公网 → 内网 → 域名 顺序检测，自动用第一个能连上的", auto) { _, c -> auto = c; Cfg.setFlag(a, "auto", c); updMode() }
+    divider(s1)
     val profs = Cfg.profiles(a)
-    val hostE = HashMap<String, TextInputEditText>(); val portE = HashMap<String, TextInputEditText>()
+    val hostE = HashMap<String, EditText>(); val portE = HashMap<String, EditText>()
+    val hints = mapOf("pub" to "公网 IP", "lan" to "内网 IP，如 192.168.x.x", "ddns" to "域名（可空）")
     for (pr in profs) {
-      val row = LinearLayout(a).apply { setPadding(0, a.dp(8), 0, 0) }
-      hostE[pr.key] = field(s1, pr.label + (if (pr.key == "ddns") "（可空）" else "") + " 地址", pr.host, InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI, weight = 2.2f, row = row)
-      portE[pr.key] = field(s1, "端口", pr.port.toString(), InputType.TYPE_CLASS_NUMBER, weight = 1f, row = row)
-      s1.addView(row)
+      val row = LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, a.dp(10), 0, 0) }
+      row.addView(a.tv(pr.label, 14f, TEXT1, true), LinearLayout.LayoutParams(a.dp(44), -2))
+      val he = box(hints[pr.key] ?: "地址", pr.host, InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
+      val pe = box("554", if (pr.host.isBlank()) "" else pr.port.toString(), InputType.TYPE_CLASS_NUMBER).apply { gravity = android.view.Gravity.CENTER }
+      row.addView(he, LinearLayout.LayoutParams(0, a.dp(46), 1f))
+      row.addView(a.tv(":", 16f, TEXT2).apply { setPadding(a.dp(6), 0, a.dp(6), 0) })
+      row.addView(pe, LinearLayout.LayoutParams(a.dp(76), a.dp(46)))
+      hostE[pr.key] = he; portE[pr.key] = pe; s1.addView(row)
     }
-    s1.addView(a.tv("手动模式下使用：", 12f, TEXT2).apply { setPadding(0, a.dp(10), 0, 0); tag = "manual" })
-    val manual = MaterialButtonToggleGroup(a).apply { isSingleSelection = true; tag = "manual" }
-    profs.forEach { pr -> manual.addView(MaterialButton(a, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { id = View.generateViewId(); text = pr.label; tag = pr.key; textSize = 12f }, LinearLayout.LayoutParams(0, -2, 1f)) }
+    val manLbl = a.tv("手动模式下使用", 12f, TEXT2).apply { setPadding(0, a.dp(14), 0, a.dp(4)) }
+    val manual = MaterialButtonToggleGroup(a).apply { isSingleSelection = true; isSelectionRequired = true }
+    profs.forEach { pr -> manual.addView(MaterialButton(a, null, outlined).apply { id = View.generateViewId(); text = pr.label; tag = pr.key; textSize = 13f }, LinearLayout.LayoutParams(0, a.dp(48), 1f)) }
     for (i in 0 until manual.childCount) if (manual.getChildAt(i).tag == Cfg.active(a).ifEmpty { "pub" }) manual.check(manual.getChildAt(i).id)
-    s1.addView(manual)
-    modeViews = listOf(s1.findViewWithTag<View>("manual"), manual)
-    val s1b = section(root, "账号")
+    s1.addView(manLbl); s1.addView(manual)
+    modeViews = listOf(manLbl, manual)
+
+    // 账号
+    val s1b = section(root, "账号", "密码用系统密钥库加密，只保存在本机。")
     val user = field(s1b, "用户名", Cfg.user(a), InputType.TYPE_CLASS_TEXT)
     val pw = field(s1b, "密码", Cfg.pass(a), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD, true)
-    val st = a.tv("", 13f, TEXT2).apply { setPadding(0, a.dp(8), 0, 0) }
+    // 测试结果状态条
+    val stTitle = a.tv("", 14f, TEXT1, true); val stDesc = a.tv("", 12f, TEXT2).apply { setPadding(0, a.dp(2), 0, 0) }
+    val stBar = col().apply { setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(10)); visibility = View.GONE; addView(stTitle); addView(stDesc) }
+    fun state(color: Int, title: String, desc: String) { stBar.visibility = View.VISIBLE; stBar.background = a.round(soft(color, 0x1F), 10)
+      stTitle.setTextColor(color); stTitle.text = title; stDesc.text = desc; stDesc.visibility = if (desc.isEmpty()) View.GONE else View.VISIBLE }
     val video = VLCVideoLayout(a)
-    val videoBox = Ratio(a).apply { setBackgroundColor(Color.BLACK); addView(video, FrameLayout.LayoutParams(-1, -1)); visibility = View.GONE }
+    val videoBox = Ratio(a).apply { setBackgroundColor(Color.BLACK); addView(video, FrameLayout.LayoutParams(-1, -1)); visibility = View.GONE
+      background = a.round(Color.BLACK, 10); clipToOutline = true }
+    val save = MaterialButton(a).apply { text = "保存"; textSize = 15f; cornerRadius = a.dp(12) }
+    val test = tonalBtn().apply { text = "测试连接"; textSize = 15f; cornerRadius = a.dp(12) }
     val btnRow = LinearLayout(a)
-    val test = MaterialButton(a, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { text = "测试连接" }
-    val save = MaterialButton(a).apply { text = "保存" }
-    btnRow.addView(test, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = a.dp(8) }); btnRow.addView(save, LinearLayout.LayoutParams(0, -2, 1f))
-    s1b.addView(btnRow, LinearLayout.LayoutParams(-1, -2).apply { topMargin = a.dp(12) }); s1b.addView(st)
-    s1b.addView(videoBox, LinearLayout.LayoutParams(-1, -2).apply { topMargin = a.dp(8) })
+    btnRow.addView(test, LinearLayout.LayoutParams(0, a.dp(50), 1f).apply { marginEnd = a.dp(10) }); btnRow.addView(save, LinearLayout.LayoutParams(0, a.dp(50), 1f))
+    s1b.addView(btnRow, LinearLayout.LayoutParams(-1, -2).apply { topMargin = a.dp(14) })
+    s1b.addView(stBar, LinearLayout.LayoutParams(-1, -2).apply { topMargin = a.dp(10) })
+    s1b.addView(videoBox, LinearLayout.LayoutParams(-1, -2).apply { topMargin = a.dp(10) })
     fun persist(): Boolean {
       for (pr in profs) Cfg.saveProf(a, pr.key, hostE[pr.key]!!.text.toString().trim(), portE[pr.key]!!.text.toString().toIntOrNull() ?: 554)
       val key = (0 until manual.childCount).map { manual.getChildAt(it) }.firstOrNull { it.id == manual.checkedButtonId }?.tag as? String ?: "pub"
@@ -83,66 +126,84 @@ class MinePage(a: MainActivity) : Page(a) {
       return true
     }
     test.setOnClickListener {
-      persist(); stopTest(); st.setTextColor(TEXT2); st.text = "正在检测地址…"; videoBox.visibility = View.VISIBLE
+      if (profs.all { hostE[it.key]!!.text.isNullOrBlank() }) { state(WARN, "还没填地址", "至少填一个公网或内网地址再测试"); return@setOnClickListener }
+      persist(); stopTest(); state(TEXT2, "正在检测地址…", "约需 2～6 秒"); videoBox.visibility = View.GONE; test.isEnabled = false
+      statusPill.setPill("检测中", TEXT2)
       a.checkOnline { pr ->
-        updActive(pr)
-        if (pr == null) { st.setTextColor(0xFFD93025.toInt()); st.text = "所有地址都连不上：公网IP可能已变化（路由器重拨），或网络断开"; return@checkOnline }
-        st.text = "地址可达（${pr.label}），正在拉取通道1画面…"
+        test.isEnabled = true; updActive(pr)
+        if (pr == null) { state(ERR, "连不上录像机", "请检查：手机是否联网；公网 IP 是否变了（路由器重拨）；内网地址是否在同一网络"); return@checkOnline }
+        state(ACCENT, "地址可达（${pr.label}），正在拉取画面…", "通道 1 · 流畅"); videoBox.visibility = View.VISIBLE
         val p = MediaPlayer(Vlc.get(a)); tp = p; p.attachViews(video, null, false, true)
         val m = Media(Vlc.get(a), android.net.Uri.parse(Cfg.url(a, 1, 1)))
         m.addOption(":rtsp-tcp"); m.addOption(":network-caching=300"); p.media = m; m.release()
         p.setEventListener { e -> when (e.type) {
-          MediaPlayer.Event.Vout -> if (e.voutCount > 0) { st.setTextColor(0xFF1E9E4A.toInt()); st.text = "连接成功（${pr.label}），已出画面" }
-          MediaPlayer.Event.EncounteredError -> { st.setTextColor(0xFFD93025.toInt()); st.text = "地址通但取流失败：请检查用户名/密码" } } }
+          MediaPlayer.Event.Vout -> if (e.voutCount > 0) state(OK, "连接成功", "${pr.label} · 已出画面，点「保存」即可使用")
+          MediaPlayer.Event.EncounteredError -> { videoBox.visibility = View.GONE; state(ERR, "地址能通，但取不到画面", "多半是用户名或密码不对，也可能该账号没有预览权限") } } }
         p.play()
       }
     }
-    save.setOnClickListener { persist(); Thumbs.clear(a); stopTest(); videoBox.visibility = View.GONE; Toast.makeText(a, "已保存", Toast.LENGTH_SHORT).show(); a.goHome() }
+    save.setOnClickListener { persist(); Thumbs.clear(a); stopTest(); videoBox.visibility = View.GONE; stBar.visibility = View.GONE; Toast.makeText(a, "已保存", Toast.LENGTH_SHORT).show(); a.goHome() }
 
-    val s2 = section(root, "播放")
-    val cacheLbl = a.tv("网络缓冲：${Cfg.caching(a)} ms（卡顿可调大，800~1500）", 13f, TEXT2).apply { setPadding(0, a.dp(8), 0, 0) }
-    s2.addView(cacheLbl)
+    // 播放
+    val s2 = section(root, "播放", "实时预览会记住上次的清晰度；移动数据下选高清会提醒流量。")
+    val cacheLbl = a.tv("", 15f, TEXT1).apply { setPadding(0, a.dp(10), 0, 0) }
+    fun cl(v: Int) { cacheLbl.text = "网络缓冲  ${v} ms" + if (v < 600) "  · 低延迟" else if (v <= 1500) "  · 均衡" else "  · 更流畅" }
+    cl(Cfg.caching(a)); s2.addView(cacheLbl)
     s2.addView(Slider(a).apply { valueFrom = 100f; valueTo = 2000f; stepSize = 100f; value = (Cfg.caching(a).coerceIn(100, 2000) / 100 * 100).toFloat()
-      addOnChangeListener { _, v, _ -> Cfg.setCaching(a, v.toInt()); cacheLbl.text = "网络缓冲：${v.toInt()} ms（卡顿可调大，800~1500）" } })
+      addOnChangeListener { _, v, _ -> Cfg.setCaching(a, v.toInt()); cl(v.toInt()) } })
+    s2.addView(a.tv("画面卡顿就往右调（800～1500 比较稳）", 12f, TEXT2))
     switch(s2, "保持屏幕常亮", "实时预览和回放时不自动锁屏", Cfg.flag(a, "keep", true)) { _, c -> Cfg.setFlag(a, "keep", c) }
-    s2.addView(a.tv("实时预览会记住上次选的清晰度（高清/流畅）；移动数据下选高清会提醒流量。", 12f, TEXT2).apply { setPadding(0, a.dp(8), 0, 0) })
 
+    // 提醒与安全
     val s3 = section(root, "提醒与安全")
-    switch(s3, "掉线提醒", "约每15分钟检测一次录像机地址，连不上/恢复时发通知（省电，仅端口检测）", Cfg.flag(a, "notify", false)) { _, c ->
+    switch(s3, "掉线提醒", "约每 15 分钟检测一次，连不上或恢复时通知你（仅端口检测，省电）", Cfg.flag(a, "notify", false)) { _, c ->
       Cfg.setFlag(a, "notify", c); Net.schedule(a, c)
       if (c && Build.VERSION.SDK_INT >= 33) a.requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 9) }
-    switch(s3, "应用锁", "打开App时需要指纹/面容或锁屏密码", Cfg.flag(a, "lock", false)) { sw, c ->
+    switch(s3, "应用锁", "打开 App 时需要指纹、面容或锁屏密码", Cfg.flag(a, "lock", false)) { sw, c ->
       val au = androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK or androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
       if (c && androidx.biometric.BiometricManager.from(a).canAuthenticate(au) != androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS) {
-        sw.isChecked = false; Toast.makeText(a, "本机没有设置指纹或锁屏密码，无法开启", Toast.LENGTH_LONG).show() }
+        sw.isChecked = false; Toast.makeText(a, "手机还没设置指纹或锁屏密码，先到系统设置里开启", Toast.LENGTH_LONG).show() }
       else { Cfg.setFlag(a, "lock", c); MainActivity.unlocked = true } }
 
-    val s4 = section(root, "存储")
-    s4.addView(cacheTv.apply { setPadding(0, a.dp(8), 0, a.dp(4)) })
-    s4.addView(MaterialButton(a, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply { text = "清除缓存"
-      setOnClickListener { Thumbs.clear(a); updCache(); Toast.makeText(a, "缓存已清除", Toast.LENGTH_SHORT).show() } })
-    s4.addView(a.tv("截图：相册/图片/大华监控截图；录像和回放片段：相册/Movies/大华监控", 12f, TEXT2).apply { setPadding(0, a.dp(6), 0, 0) })
+    // 存储
+    val s4 = section(root, "存储", "截图在 相册/图片/大华监控截图；录像在 相册/Movies/大华监控。")
+    val srow = LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, a.dp(8), 0, 0) }
+    srow.addView(cacheTv, LinearLayout.LayoutParams(0, -2, 1f))
+    srow.addView(tonalBtn().apply { text = "清除"; cornerRadius = a.dp(12)
+      setOnClickListener { Thumbs.clear(a); updCache(); Toast.makeText(a, "缓存已清除", Toast.LENGTH_SHORT).show() } }, LinearLayout.LayoutParams(-2, a.dp(44)))
+    s4.addView(srow)
+
+    // 更新
     val s5 = section(root, "更新")
-    s5.addView(a.tv("当前版本 v${BuildConfig.VERSION_NAME}", 14f, TEXT1).apply { setPadding(0, a.dp(8), 0, 0) })
-    switch(s5, "自动检查更新", "打开App时检查（最多每12小时一次）", Updater.auto(a)) { _, c -> Updater.setAuto(a, c) }
-    val mir = field(s5, "下载镜像前缀（每行一个，GitHub 下载失败或太慢时依次尝试）", Updater.mirrors(a), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE)
-    mir.isSingleLine = false; mir.maxLines = 4
-    s5.addView(a.tv("镜像为第三方免费服务，可能失效；安装包会校验大小和 SHA-256。", 12f, TEXT2).apply { setPadding(0, a.dp(4), 0, 0) })
-    s5.addView(MaterialButton(a).apply { text = "检查更新"; setOnClickListener { Updater.setMirrors(a, mir.text.toString()); Updater.check(a, true) } },
-      LinearLayout.LayoutParams(-1, -2).apply { topMargin = a.dp(8) })
+    val vrow = LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, a.dp(8), 0, 0) }
+    vrow.addView(a.tv("当前版本", 15f, TEXT1), LinearLayout.LayoutParams(0, -2, 1f)); vrow.addView(a.tv("v${BuildConfig.VERSION_NAME}", 15f, TEXT2))
+    s5.addView(vrow)
+    switch(s5, "自动检查更新", "打开 App 时检查（最多每 12 小时一次）", Updater.auto(a)) { _, c -> Updater.setAuto(a, c) }
+    val adv = col()
+    val mir = box("每行一个镜像前缀", Updater.mirrors(a), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE).apply {
+      isSingleLine = false; maxLines = 4; minLines = 2; gravity = android.view.Gravity.TOP; setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(10)); textSize = 13f }
+    adv.addView(a.tv("GitHub 下载慢或失败时依次尝试。镜像是第三方免费服务，可能失效；安装包会校验大小和 SHA-256。", 12f, TEXT2).apply { setPadding(0, a.dp(4), 0, a.dp(8)) })
+    adv.addView(mir, LinearLayout.LayoutParams(-1, -2))
+    fold(s5, "下载镜像（高级）", adv)
+    s5.addView(MaterialButton(a).apply { text = "检查更新"; textSize = 15f; cornerRadius = a.dp(12); setOnClickListener { Updater.setMirrors(a, mir.text.toString()); Updater.check(a, true) } },
+      LinearLayout.LayoutParams(-1, a.dp(50)).apply { topMargin = a.dp(12) })
+
+    // 关于
     val s6 = section(root, "关于")
-    s6.addView(a.tv("大华监控  v${BuildConfig.VERSION_NAME}", 14f, TEXT1).apply { setPadding(0, a.dp(8), 0, a.dp(4)) })
-    s6.addView(a.tv("开源的大华录像机手机查看工具，RTSP（TCP）直连录像机。支持实时预览、录像回放、轮巡、分组、电子放大、本地录像、掉线提醒、在线更新。密码用系统密钥库加密只保存在本机。\n项目地址：github.com/${Updater.REPO}", 12f, TEXT2))
-    view = ScrollView(a).apply { addView(root) }
+    val ab = col(); ab.addView(a.tv("开源的大华录像机手机查看工具，RTSP（TCP）直连录像机。支持实时预览、录像回放、轮巡、分组、电子放大、本地录像、掉线提醒、在线更新。\n项目地址：github.com/${Updater.REPO}", 12f, TEXT2).apply { setPadding(0, a.dp(4), 0, a.dp(4)); setLineSpacing(0f, 1.2f) })
+    fold(s6, "大华监控 v${BuildConfig.VERSION_NAME}", ab)
+    view = ScrollView(a).apply { addView(root); isVerticalScrollBarEnabled = false }
     updMode()
   }
   private fun updMode() { val auto = Cfg.flag(a, "auto", true); modeViews.forEach { it.visibility = if (auto) View.GONE else View.VISIBLE }; updActive(null, true) }
   private fun updActive(pr: Cfg.Prof?, fromCfg: Boolean = false) {
     val cur = Cfg.profiles(a).firstOrNull { it.key == Cfg.active(a) }
-    activeTv.text = if (!fromCfg && pr == null) "当前：全部不可达（公网IP可能变了）" else "当前使用：${(pr ?: cur)?.label ?: "公网"}  ${Cfg.host(a)}:${Cfg.port(a)}"
+    if (!Cfg.configured(a) || Cfg.host(a).isBlank()) { activeTv.text = "还没设置地址，请在下方填写"; statusPill.setPill("未设置", WARN); return }
+    activeTv.text = if (!fromCfg && pr == null) "所有地址都连不上" else "${(pr ?: cur)?.label ?: "公网"} · ${Cfg.host(a)}:${Cfg.port(a)}"
+    if (!fromCfg) statusPill.setPill(if (pr == null) "离线" else "在线", if (pr == null) ERR else OK)
   }
-  private fun updCache() { cacheTv.text = "缩略图缓存：%.1f MB".format(Thumbs.size(a) / 1048576.0) }
+  private fun updCache() { cacheTv.text = "缩略图缓存  %.1f MB".format(Thumbs.size(a) / 1048576.0) }
   private fun stopTest() { tp?.let { it.setEventListener(null); it.stop(); it.detachViews(); it.release() }; tp = null }
-  override fun onShow() { updCache(); updActive(null, true) }
+  override fun onShow() { updCache(); updActive(null, true); if (Cfg.configured(a)) a.checkOnline { updActive(it) } }
   override fun onHide() { stopTest() }
 }
