@@ -72,8 +72,9 @@ class MainActivity : AppCompatActivity() {
     setContentView(root)
     home = HomePage(this); all = AllPage(this); mine = MinePage(this); pb = PlaybackPage(this)
     for (pg in listOf(home, all, pb, mine)) { pg.view.setBackgroundColor(BG); pg.view.visibility = View.GONE; content.addView(pg.view, FrameLayout.LayoutParams(-1, -1)) }
-    nav.setOnItemSelectedListener { select(it.itemId); if (rail.selectedItemId != it.itemId) rail.selectedItemId = it.itemId; true }
-    rail.setOnItemSelectedListener { if (nav.selectedItemId != it.itemId) nav.selectedItemId = it.itemId; true }
+    // 两套导航互相同步：用 isChecked 同步高亮，不再互相触发监听（之前大屏左侧导航会无限递归导致闪退）
+    nav.setOnItemSelectedListener { select(it.itemId); rail.menu.findItem(it.itemId)?.isChecked = true; true }
+    rail.setOnItemSelectedListener { select(it.itemId); nav.menu.findItem(it.itemId)?.isChecked = true; true }
     Updater.autoCheck(this)
     if (Cfg.configured(this)) nav.selectedItemId = 1 else { nav.selectedItemId = 3; mine.openConn(); snack("首次使用，请先填写连接信息", true) }
   }
@@ -83,7 +84,7 @@ class MainActivity : AppCompatActivity() {
     cur?.let { it.onHide(); it.view.visibility = View.GONE }
     cur = n; n.view.alpha = 0f; n.view.translationY = dp(8).toFloat(); n.view.visibility = View.VISIBLE; n.view.animate().alpha(1f).translationY(0f).setDuration(180).start(); n.onShow()
   }
-  fun goHome() { nav.selectedItemId = 1 }
+  fun goHome() { if (railMode == true) rail.selectedItemId = 1 else nav.selectedItemId = 1 }
   /** 统一返回：二级页 → 上一级；非首页 Tab → 首页；首页 → 退出 */
   @Deprecated("") override fun onBackPressed() {
     if (lockView != null) { finish(); return }
