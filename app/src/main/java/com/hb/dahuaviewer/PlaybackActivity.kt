@@ -14,6 +14,7 @@ import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import java.io.File
 import java.text.SimpleDateFormat
@@ -25,6 +26,8 @@ class PlaybackActivity : AppCompatActivity() {
   private lateinit var videoBox: Ratio
   private lateinit var below: View; private lateinit var topBar: View
   private lateinit var clock: TextView; private lateinit var dateBtn: MaterialButton; private lateinit var timeBtn: MaterialButton
+  private lateinit var ov: LinearLayout; private lateinit var ovTitle: TextView
+  private var forceFull = false
   private lateinit var slider: Slider; private lateinit var playLbl: TextView; private lateinit var playIcon: ImageView; private lateinit var dlLbl: TextView
   private var ch = 1
   private val day = Calendar.getInstance()          // 选择的日期（00:00）
@@ -50,9 +53,20 @@ class PlaybackActivity : AppCompatActivity() {
     bar.addView(tv("录像回放 · ${Cfg.name(this, ch)}", 17f, Color.WHITE, true)); topBar = bar; root.addView(bar)
     videoBox = Ratio(this).apply { setBackgroundColor(Color.BLACK) }
     tile = Tile(this, showLabel = false).apply { showInfo = true; zoomable = true; autoReconnect = false; onEnd = { setPlayUi(false) } }
-    videoBox.addView(tile, FrameLayout.LayoutParams(-1, -1)); root.addView(videoBox, LinearLayout.LayoutParams(-1, -2))
+    videoBox.addView(tile, FrameLayout.LayoutParams(-1, -1))
+    ov = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x99000000.toInt(), 0)); setPadding(dp(8), dp(8), dp(16), dp(24)); visibility = View.GONE }
+    ov.addView(ImageButton(this).apply { setImageResource(R.drawable.ic_back); setColorFilter(Color.WHITE); setBackgroundColor(0); setOnClickListener { exitFull() } }, LinearLayout.LayoutParams(dp(48), dp(48)))
+    ovTitle = tv("回放 · ${Cfg.name(this, ch)}", 15f, Color.WHITE, true); ov.addView(ovTitle, LinearLayout.LayoutParams(0, -2, 1f))
+    fun ob(t: String, f: () -> Unit) = TextView(this).apply { text = t; textSize = 13f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; background = round(0x33FFFFFF, 16)
+      setPadding(dp(14), 0, dp(14), 0); setOnClickListener { f(); showOv() } }.also { ov.addView(it, LinearLayout.LayoutParams(-2, dp(36)).apply { marginStart = dp(8) }) }
+    ob("暂停") { togglePlay() }; ob("截图") { shot() }; ob("退出全屏") { exitFull() }
+    videoBox.addView(ov, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+    root.addView(videoBox, LinearLayout.LayoutParams(-1, -2))
     tile.onDouble = { tile.toggleZoom() }
-    tile.onTap = { if (!wide()) requestedOrientation = if (isLand()) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE }
+    tile.onTap = {
+      if (inFull()) { if (ov.visibility == View.VISIBLE) ov.visibility = View.GONE else showOv() }
+      else if (!wide()) requestedOrientation = if (isLand()) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    }
 
     val bl = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), 0, dp(8), dp(8)) }
     val c1 = card(); val l1 = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(12), dp(16), dp(12)) }; c1.addView(l1)
@@ -101,6 +115,7 @@ class PlaybackActivity : AppCompatActivity() {
     rb(R.drawable.ic_forward, "前进30秒") { open(Date(pos() + 30_000)) }
     rb(R.drawable.ic_shot, "截图") { shot() }
     dlLbl = rb(R.drawable.ic_download, "下载片段") { if (tile.recPath != null) stopDl() else startDl() }.second
+    rb(R.drawable.ic_fullscreen, "全屏") { enterFull() }
     bl.addView(ctl)
     val sp = MaterialButtonToggleGroup(this).apply { isSingleSelection = true; isSelectionRequired = true }
     listOf(0.5f, 1f, 2f, 4f).forEachIndexed { i, r -> sp.addView(MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
@@ -114,10 +129,49 @@ class PlaybackActivity : AppCompatActivity() {
     dateBtn.setOnClickListener { DatePickerDialog(this, { _, y, m, d -> day.set(y, m, d); zero(day)
       open(Date(day.timeInMillis + slider.value.toLong() * 60_000)) }, day.get(Calendar.YEAR), day.get(Calendar.MONTH), day.get(Calendar.DAY_OF_MONTH))
       .apply { datePicker.maxDate = System.currentTimeMillis() }.show() }
-    timeBtn.setOnClickListener { val c = Calendar.getInstance().apply { timeInMillis = pos() }
-      TimePickerDialog(this, { _, hh, mm -> open(Date(day.timeInMillis + (hh * 60 + mm) * 60_000L)) }, c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), true).show() }
+    timeBtn.setOnClickListener { showPreciseTime() }
     applyOrientation()
   }
+  private fun showPreciseTime() {
+    val c = Calendar.getInstance().apply { timeInMillis = pos() }
+    val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
+    fun num(hint: String, v: Int, max: Int) = com.google.android.material.textfield.TextInputLayout(this).apply {
+      this.hint = hint; boxBackgroundMode = com.google.android.material.textfield.TextInputLayout.BOX_BACKGROUND_OUTLINE
+      val r = dp(10).toFloat(); setBoxCornerRadii(r,r,r,r)
+      addView(com.google.android.material.textfield.TextInputEditText(context).apply {
+        setText("%02d".format(v)); inputType = android.text.InputType.TYPE_CLASS_NUMBER; setSingleLine(); tag = max })
+    }
+    val row = LinearLayout(this)
+    val hh = num("时", c.get(Calendar.HOUR_OF_DAY), 23)
+    val mm = num("分", c.get(Calendar.MINUTE), 59)
+    val ss = num("秒", c.get(Calendar.SECOND), 59)
+    row.addView(hh, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
+    row.addView(mm, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
+    row.addView(ss, LinearLayout.LayoutParams(0, -2, 1f))
+    box.addView(tv("精确到秒（24小时制）", 13f, TEXT2).apply { setPadding(0, 0, 0, dp(8)) })
+    box.addView(row)
+    // also keep system picker shortcut
+    box.addView(MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+      text = "用系统时间选择器（到分钟）"; setOnClickListener {
+        TimePickerDialog(this@PlaybackActivity, { _, h, m -> open(Date(day.timeInMillis + (h * 60 + m) * 60_000L)) },
+          c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), true).show()
+      }
+    }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+    fun read(til: com.google.android.material.textfield.TextInputLayout): Int {
+      val et = til.editText!!; val max = et.tag as Int
+      return et.text.toString().toIntOrNull()?.coerceIn(0, max) ?: 0
+    }
+    MaterialAlertDialogBuilder(this).setTitle("跳转到时间").setView(box)
+      .setPositiveButton("跳转") { _, _ ->
+        val t = day.timeInMillis + (read(hh) * 3600L + read(mm) * 60L + read(ss)) * 1000L
+        open(Date(t))
+      }.setNegativeButton("取消", null).show()
+  }
+  private fun inFull() = forceFull || isLand()
+  private fun enterFull() { if (wide()) { forceFull = true; applyOrientation() } else requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE }
+  private fun exitFull() { if (forceFull) { forceFull = false; applyOrientation() } else requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
+  private fun showOv() { ov.visibility = View.VISIBLE; ov.alpha = 0f; ov.animate().alpha(1f).setDuration(150).start(); h.removeCallbacks(hideOv); h.postDelayed(hideOv, 4000) }
+  private val hideOv = Runnable { ov.visibility = View.GONE }
   private fun zero(c: Calendar) { c.set(Calendar.HOUR_OF_DAY, 0); c.set(Calendar.MINUTE, 0); c.set(Calendar.SECOND, 0); c.set(Calendar.MILLISECOND, 0) }
   private fun pos() = openAt.time + (tile.time * 1L)
   private fun open(t: Date) {
@@ -142,7 +196,7 @@ class PlaybackActivity : AppCompatActivity() {
     h.removeCallbacksAndMessages(null)
     val p = pos(); clock.text = full.format(Date(p)); dateBtn.text = df.format(day.time)
     val c = Calendar.getInstance().apply { timeInMillis = p }
-    timeBtn.text = "%02d:%02d".format(c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE))
+    timeBtn.text = "%02d:%02d:%02d".format(c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), c.get(Calendar.SECOND))
     if (!dragging) slider.value = ((p - day.timeInMillis) / 60_000).coerceIn(0, 1439).toFloat()
     if (tile.recPath != null) { val s = (System.currentTimeMillis() - recStart) / 1000; dlLbl.text = "%02d:%02d".format(s / 60, s % 60); dlLbl.setTextColor(0xFFD93025.toInt()) }
     else { dlLbl.text = "下载片段"; dlLbl.setTextColor(TEXT1) }
@@ -175,13 +229,14 @@ class PlaybackActivity : AppCompatActivity() {
   override fun onConfigurationChanged(c: Configuration) { super.onConfigurationChanged(c); applyOrientation() }
   @Suppress("DEPRECATION")
   private fun applyOrientation() {
-    val land = isLand(); videoBox.enabledRatio = !land
-    videoBox.maxH = if (wide()) (resources.displayMetrics.heightPixels * 0.55f).toInt() else Int.MAX_VALUE
+    val land = inFull(); videoBox.enabledRatio = !land
+    videoBox.maxH = if (wide() && !land) (resources.displayMetrics.heightPixels * 0.55f).toInt() else Int.MAX_VALUE
     videoBox.layoutParams = LinearLayout.LayoutParams(-1, if (land) -1 else -2)
     below.visibility = if (land) View.GONE else View.VISIBLE; topBar.visibility = below.visibility
+    if (land) showOv() else ov.visibility = View.GONE
     window.decorView.systemUiVisibility = if (land) View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY else 0
   }
-  @Deprecated("") override fun onBackPressed() { if (isLand()) { requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT; return }; @Suppress("DEPRECATION") super.onBackPressed() }
+  @Deprecated("") override fun onBackPressed() { if (inFull()) { exitFull(); return }; @Suppress("DEPRECATION") super.onBackPressed() }
   override fun onSaveInstanceState(o: Bundle) { super.onSaveInstanceState(o); o.putLong("t", pos()) }
   override fun onResume() { super.onResume(); open(openAt) }
   override fun onPause() { super.onPause(); if (tile.playing) openAt = Date(pos()); if (tile.recPath != null) stopDl(true); tile.stop(); h.removeCallbacksAndMessages(null) }

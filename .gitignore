@@ -12,3 +12,5 @@ app/build/
 *.iml
 captures/
 *.sha256
+
+cloud-config.enc

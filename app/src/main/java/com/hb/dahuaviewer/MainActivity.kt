@@ -76,6 +76,11 @@ class MainActivity : AppCompatActivity() {
     nav.setOnItemSelectedListener { select(it.itemId); rail.menu.findItem(it.itemId)?.isChecked = true; true }
     rail.setOnItemSelectedListener { select(it.itemId); nav.menu.findItem(it.itemId)?.isChecked = true; true }
     Updater.autoCheck(this)
+    if (Cloud.enabled) try {
+      Cloud.applyDefaults(this)
+      Cloud.fetchAndApply(this) { msg -> if (msg.contains("填入") || msg.contains("失败") || msg.contains("未找到")) snack(msg) }
+      Cloud.pullChannels(this)
+    } catch (_: Throwable) {}
     if (Cfg.configured(this)) nav.selectedItemId = 1 else { nav.selectedItemId = 3; mine.openConn(); snack("首次使用，请先填写连接信息", true) }
   }
   fun select(id: Int) {
@@ -109,7 +114,7 @@ class MainActivity : AppCompatActivity() {
     val et = TextInputEditText(til.context).apply { setText(Cfg.name(this@MainActivity, ch)); setSingleLine() }
     til.addView(et)
     MaterialAlertDialogBuilder(this).setTitle("重命名 通道$ch").setView(til)
-      .setPositiveButton("保存") { _, _ -> Cfg.rename(this, ch, et.text.toString().trim()); done() }.setNegativeButton("取消", null).show()
+      .setPositiveButton("保存") { _, _ -> Cfg.rename(this, ch, et.text.toString().trim()); Cloud.pushChannels(this) { m -> if (m != "NO_TOKEN" && m.contains("同步")) snack(m) }; done() }.setNegativeButton("取消", null).show()
   }
   fun camMenu(anchor: View, ch: Int, done: () -> Unit) {
     PopupMenu(this, anchor).apply {
@@ -251,7 +256,7 @@ class HomePage(a: MainActivity) : Page(a) {
       1 -> CamVH(); 0 -> object : RecyclerView.ViewHolder(a.tv("", 13f, TEXT2, true).apply { setPadding(a.dp(10), a.dp(18), a.dp(8), a.dp(6)); letterSpacing = 0.04f }) {}
       else -> object : RecyclerView.ViewHolder(LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(0, a.dp(60), 0, a.dp(60))
         addView(FrameLayout(a).apply { background = a.round(FILL, 40); addView(a.icon(R.drawable.ic_videocam, TEXT2, 40), FrameLayout.LayoutParams(a.dp(40), a.dp(40), Gravity.CENTER)) }, LinearLayout.LayoutParams(a.dp(80), a.dp(80)))
-        addView(a.tv("", 14f, TEXT2).apply { setPadding(a.dp(32), a.dp(14), a.dp(32), 0); gravity = Gravity.CENTER }) }) {}
+        addView(a.tv("", 15f, TEXT2).apply { setPadding(a.dp(36), a.dp(16), a.dp(36), 0); gravity = Gravity.CENTER; setLineSpacing(0f, 1.25f) }) }) {}
     }
     override fun onBindViewHolder(vh: RecyclerView.ViewHolder, p: Int) {
       when (val it = items[p]) {
@@ -270,7 +275,7 @@ class HomePage(a: MainActivity) : Page(a) {
     private val dotV = a.dot(TEXT2)
     init {
       val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-      val r = Ratio(a).apply { setBackgroundColor(FILL) }
+      val r = Ratio(a).apply { setBackgroundColor(FILL); clipToOutline = true; outlineProvider = object : android.view.ViewOutlineProvider() { override fun getOutline(v: android.view.View, o: android.graphics.Outline) { o.setRoundRect(0,0,v.width,v.height, a.dp(10).toFloat()) } } }
       r.addView(ph, FrameLayout.LayoutParams(a.dp(36), a.dp(36), Gravity.CENTER)); r.addView(img, FrameLayout.LayoutParams(-1, -1))
       r.addView(star, FrameLayout.LayoutParams(a.dp(18), a.dp(18), Gravity.TOP or Gravity.END).apply { setMargins(0, a.dp(8), a.dp(8), 0) })
       col.addView(r)
@@ -350,7 +355,7 @@ class AllPage(a: MainActivity) : Page(a) {
   override fun onShow() { if (!Cfg.configured(a)) return
     if (!userSplit && patrol == null) { val d = if (a.wide()) 9 else 4; if (d != split) { split = d; page = 0; group.check(100 + d) } }
     if (split == 0) { if (patrol != null) { patrol = null; updPatrolBtn() }; showAll() } else showGrid()
-    if (patrol != null) ph.postDelayed({ if (patrol != null) go(1) }, patrolSec * 1000L) }
+    schedulePatrol() }
   override fun onHide() {
     ph.removeCallbacksAndMessages(null)
     tiles.forEach { it.stop() }; tiles.clear()
@@ -366,7 +371,28 @@ class AllPage(a: MainActivity) : Page(a) {
       layoutParams = LinearLayout.LayoutParams(a.dp(if (i == page) 16 else 6), a.dp(6)).apply { setMargins(a.dp(3), 0, a.dp(3), 0) }
       background = a.round(if (i == page) ACCENT else LINE, 3) })
   }
-  private fun go(d: Int) { if (split == 0) return; slotOverride.clear(); page = (page + d + pages) % pages; onHide(); onShow() }
+  /** 翻页：优先复用已有 Tile，先切通道再淡入，减少黑屏【待验证】 */
+  private fun go(d: Int) {
+    if (split == 0) return; slotOverride.clear()
+    page = (page + d + pages) % pages
+    if (tiles.isNotEmpty() && tiles.size == split && body.childCount > 0) { flipInPlace(); schedulePatrol(); return }
+    onHide(); onShow()
+  }
+  private fun schedulePatrol() { ph.removeCallbacksAndMessages(null); schedulePatrol() }
+  private fun flipInPlace() {
+    drawDots()
+    val sub = if (split == 1) 0 else 1
+    tiles.forEachIndexed { i, t ->
+      val ch = slotOverride[i] ?: src.getOrNull(page * split + i)
+      if (ch == null) { t.stop(); t.visibility = View.INVISIBLE; return@forEachIndexed }
+      t.visibility = View.VISIBLE; t.alpha = 0.35f
+      t.onDouble = { a.openPreview(ch) }; t.onTap = { a.openPreview(ch) }
+      val slot = i
+      t.onLong = { a.pickChannel("这个格子换成哪路") { n -> slotOverride[slot] = n; flipInPlace() } }
+      t.play(ch, sub)
+      t.animate().alpha(1f).setDuration(220).start()
+    }
+  }
   private fun showGrid() {
     if (page >= pages) page = 0
     val cols = when (split) { 1 -> 1; 4 -> 2; 9 -> 3; else -> 4 }
@@ -391,7 +417,7 @@ class AllPage(a: MainActivity) : Page(a) {
         val t = Tile(a); tiles += t; val slot = i
         grid.addView(t, GridLayout.LayoutParams().apply { width = w - gap * 2; height = hh - gap * 2; setMargins(gap, gap, gap, gap) })
         t.onDouble = { a.openPreview(ch) }; t.onTap = { a.openPreview(ch) }
-        t.onLong = { a.pickChannel("这个格子换成哪路") { n -> slotOverride[slot] = n; onHide(); onShow() } }
+        t.onLong = { a.pickChannel("这个格子换成哪路") { n -> slotOverride[slot] = n; flipInPlace() } }
         t.play(ch, if (split == 1) 0 else 1)
       }
     }

@@ -130,6 +130,7 @@ class MinePage(a: MainActivity) : Page(a) {
     val pSafe = entry("提醒与安全", "掉线提醒、应用锁", R.drawable.ic_lens, 0xFF34C759.toInt())
     val pStore = entry("存储", "缩略图缓存、截图录像位置", R.drawable.ic_download, 0xFF8E8E93.toInt())
     val pUpd = entry("更新与关于", "当前 v${BuildConfig.VERSION_NAME} · 检查更新", R.drawable.ic_loop, 0xFFAF52DE.toInt())
+    val pCloud = entry("云端同步", "拉取/推送通道命名与分组，恢复云端密码", R.drawable.ic_loop, 0xFF5856D6.toInt())
 
     // 连接
     val s1 = section(pConn, "连接", "地址填录像机 IP 或域名，端口一般是 554。公网 IP 路由器重拨后可能会变。")
@@ -138,12 +139,15 @@ class MinePage(a: MainActivity) : Page(a) {
     divider(s1)
     val profs = Cfg.profiles(a)
     val hostE = HashMap<String, EditText>(); val portE = HashMap<String, EditText>()
-    val hints = mapOf("pub" to "公网 IP", "lan" to "内网 IP，如 192.168.x.x", "ddns" to "域名（可空）")
+    val hints = mapOf("pub" to Cloud.DEF_PUB_HOST, "lan" to Cloud.DEF_LAN_HOST, "ddns" to "域名（可空）")
+    val defPort = mapOf("pub" to Cloud.DEF_PUB_PORT, "lan" to Cloud.DEF_LAN_PORT, "ddns" to 554)
     for (pr in profs) {
       val row = LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, a.dp(10), 0, 0) }
       row.addView(a.tv(pr.label, 14f, TEXT1, true), LinearLayout.LayoutParams(a.dp(44), -2))
-      val he = box(hints[pr.key] ?: "地址", pr.host, InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
-      val pe = box("554", if (pr.host.isBlank()) "" else pr.port.toString(), InputType.TYPE_CLASS_NUMBER).apply { gravity = android.view.Gravity.CENTER }
+      val hostShow = pr.host.ifBlank { if (pr.key == "ddns") "" else hints[pr.key]!! }
+      val portShow = if (pr.host.isBlank() && pr.key != "ddns") defPort[pr.key]!!.toString() else if (pr.host.isBlank()) "" else pr.port.toString()
+      val he = box(hints[pr.key] ?: "地址", hostShow, InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
+      val pe = box("554", portShow, InputType.TYPE_CLASS_NUMBER).apply { gravity = android.view.Gravity.CENTER }
       row.addView(he, LinearLayout.LayoutParams(0, a.dp(46), 1f))
       row.addView(a.tv(":", 16f, TEXT2).apply { setPadding(a.dp(6), 0, a.dp(6), 0) })
       row.addView(pe, LinearLayout.LayoutParams(a.dp(76), a.dp(46)))
@@ -160,6 +164,53 @@ class MinePage(a: MainActivity) : Page(a) {
     val s1b = section(pConn, "账号", "密码用系统密钥库加密，只保存在本机。")
     val user = field(s1b, "用户名", Cfg.user(a), InputType.TYPE_CLASS_TEXT)
     val pw = field(s1b, "密码", Cfg.pass(a), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD, true)
+
+    // 云端同步页内容（引用上面的输入框）
+    run {
+      val sc = section(pCloud, "连接默认值", "公网/内网地址与用户名可自动填；密码以加密包从 Release 下发，不进安装包。")
+      sc.addView(a.tv("推荐：公网 ${Cloud.DEF_PUB_HOST}:${Cloud.DEF_PUB_PORT} · 内网 ${Cloud.DEF_LAN_HOST}:${Cloud.DEF_LAN_PORT} · 用户 ${Cloud.DEF_USER}", 12f, TEXT2).apply { setPadding(0, a.dp(8), 0, a.dp(4)) })
+      sc.addView(MaterialButton(a).apply { text = "一键填入推荐地址"; cornerRadius = a.dp(12); textSize = 15f
+        setOnClickListener {
+          Cloud.applyDefaults(a)
+          hostE["pub"]?.setText(Cloud.DEF_PUB_HOST); portE["pub"]?.setText("${Cloud.DEF_PUB_PORT}")
+          hostE["lan"]?.setText(Cloud.DEF_LAN_HOST); portE["lan"]?.setText("${Cloud.DEF_LAN_PORT}")
+          user.setText(Cloud.DEF_USER); a.snack("已填入推荐地址，密码请点下方从云端恢复")
+        } }, LinearLayout.LayoutParams(-1, a.dp(48)).apply { topMargin = a.dp(8) })
+      sc.addView(MaterialButton(a, null, outlined).apply { text = "从云端恢复密码与地址"; cornerRadius = a.dp(12); textSize = 15f
+        setOnClickListener {
+          a.snack("正在拉取云端配置…")
+          Cloud.fetchAndApply(a, force = true) { msg ->
+            val pubs = Cfg.profiles(a).first { it.key == "pub" }; val lans = Cfg.profiles(a).first { it.key == "lan" }
+            hostE["pub"]?.setText(pubs.host); portE["pub"]?.setText(pubs.port.toString())
+            hostE["lan"]?.setText(lans.host); portE["lan"]?.setText(lans.port.toString())
+            user.setText(Cfg.user(a)); pw.setText(Cfg.pass(a)); a.snack(msg, true)
+          }
+        } }, LinearLayout.LayoutParams(-1, a.dp(48)).apply { topMargin = a.dp(8) })
+      val sc2 = section(pCloud, "通道命名 / 分组 / 收藏", "多台设备共用。启动时自动拉取；修改后可推送。")
+      sc2.addView(MaterialButton(a).apply { text = "立即从云端拉取"; cornerRadius = a.dp(12)
+        setOnClickListener { Cloud.pullChannels(a) { a.snack(it, true) } } }, LinearLayout.LayoutParams(-1, a.dp(48)).apply { topMargin = a.dp(8) })
+      sc2.addView(MaterialButton(a, null, outlined).apply { text = "同步到云端"; cornerRadius = a.dp(12)
+        setOnClickListener {
+          Cloud.pushChannels(a) { m ->
+            if (m == "NO_TOKEN") {
+              val json = Cloud.exportChannels(a)
+              val clip = a.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+              clip.setPrimaryClip(android.content.ClipData.newPlainText("channels", json))
+              val f = java.io.File(a.cacheDir, "channels.json").apply { writeText(json) }
+              val uri = androidx.core.content.FileProvider.getUriForFile(a, a.packageName + ".files", f)
+              a.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("application/json").putExtra(android.content.Intent.EXTRA_STREAM, uri).addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION), "导出通道配置"))
+              a.snack("无自动推送令牌：已复制并分享，发给助手上传到仓库即可", true)
+            } else a.snack(m, true)
+          }
+        } }, LinearLayout.LayoutParams(-1, a.dp(48)).apply { topMargin = a.dp(8) })
+      sc2.addView(MaterialButton(a, null, outlined).apply { text = "从剪贴板导入"; cornerRadius = a.dp(12)
+        setOnClickListener {
+          val clip = a.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+          val t = clip.primaryClip?.getItemAt(0)?.coerceToText(a)?.toString()
+          if (t.isNullOrBlank()) a.snack("剪贴板是空的") else try { Cloud.importChannels(a, t, preferRemote = true); a.snack("已导入") } catch (e: Exception) { a.snack("导入失败：${e.message}") }
+        } }, LinearLayout.LayoutParams(-1, a.dp(48)).apply { topMargin = a.dp(8) })
+    }
+
     // 测试结果状态条
     val stTitle = a.tv("", 14f, TEXT1, true); val stDesc = a.tv("", 12f, TEXT2).apply { setPadding(0, a.dp(2), 0, 0) }
     val stBar = col().apply { setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(10)); visibility = View.GONE; addView(stTitle); addView(stDesc) }

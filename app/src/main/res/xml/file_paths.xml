@@ -1,1 +1,4 @@
-<paths><cache-path name="apk" path="apk/"/></paths>
+<paths>
+  <cache-path name="apk" path="apk/"/>
+  <cache-path name="cache" path="."/>
+</paths>

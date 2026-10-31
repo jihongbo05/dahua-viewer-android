@@ -9,6 +9,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class NavTest {
   private fun run() {
+    Cloud.enabled = false
     val a = Robolectric.buildActivity(MainActivity::class.java).setup().get()
     val bars = mutableListOf<com.google.android.material.navigation.NavigationBarView>()
     fun walk(v: android.view.View) { if (v is com.google.android.material.navigation.NavigationBarView && v.isAttachedToWindow) bars += v; if (v is android.view.ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i)) }

@@ -92,7 +92,7 @@ class Tile(ctx: Context, showLabel: Boolean = true) : FrameLayout(ctx) {
   }
   private fun start() {
     if (!want) return
-    setStatus("加载中…")
+    setStatus("缓冲中…")
     val p = MediaPlayer(Vlc.get(context)); mp = p
     p.attachViews(layout, null, false, true)
     val m = Media(Vlc.get(context), android.net.Uri.parse(customUrl ?: Cfg.url(context, channel, sub)))

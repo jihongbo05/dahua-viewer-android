@@ -1,7 +1,7 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
 android {
   namespace = "com.hb.dahuaviewer"; compileSdk = 34
-  defaultConfig { applicationId = "com.hb.dahuaviewer"; minSdk = 24; targetSdk = 34; versionCode = 9; versionName = "1.5.1"
+  defaultConfig { applicationId = "com.hb.dahuaviewer"; minSdk = 24; targetSdk = 34; versionCode = 10; versionName = "1.6.0"
     ndk { abiFilters += listOf("arm64-v8a") } }
   signingConfigs { create("rel") { storeFile = file("../release.keystore"); storePassword = System.getenv("KS_PASS"); keyAlias = "dahua"; keyPassword = System.getenv("KS_PASS") } }
   buildTypes { release { isMinifyEnabled = false; signingConfig = signingConfigs.getByName("rel") } }
