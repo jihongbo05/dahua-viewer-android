@@ -24,6 +24,7 @@ import kotlin.concurrent.thread
 object Updater {
   const val REPO = "jihongbo05/dahua-viewer-android"
   const val DEFAULT_MIRRORS = "https://ghfast.top/\nhttps://gh-proxy.com/"
+  const val GH = "https://github.com/$REPO"
   data class Rel(val tag: String, val body: String, val apkUrl: String, val apkName: String, val size: Long, val shaUrl: String?, val htmlUrl: String)
 
   private fun prefs(c: Context) = c.getSharedPreferences("upd", 0)
@@ -31,7 +32,7 @@ object Updater {
   fun setAuto(c: Context, v: Boolean) = prefs(c).edit().putBoolean("auto", v).apply()
   fun mirrors(c: Context) = prefs(c).getString("mirrors", DEFAULT_MIRRORS)!!
   fun setMirrors(c: Context, v: String) = prefs(c).edit().putString("mirrors", v).apply()
-  private fun mirrorList(c: Context) = mirrors(c).split("\n", ",", " ").map { it.trim() }.filter { it.startsWith("http") }.map { if (it.endsWith("/")) it else "$it/" }
+  internal fun mirrorList(c: Context) = (mirrors(c) + "\n" + DEFAULT_MIRRORS).split("\n", ",", " ").map { it.trim() }.filter { it.startsWith("http") }.map { if (it.endsWith("/")) it else "$it/" }.distinct()
 
   /** "v1.3.0" vs "1.2" → 正数表示 a 更新 */
   fun cmp(a: String, b: String): Int {
@@ -59,24 +60,17 @@ object Updater {
   fun check(a: Activity, manual: Boolean) {
     if (manual) Toast.makeText(a, "正在检查更新…", Toast.LENGTH_SHORT).show()
     thread {
-      val res: Result<Rel?> = try {
-        val c = (URL("https://api.github.com/repos/$REPO/releases/latest").openConnection() as HttpURLConnection).apply {
-          connectTimeout = 8000; readTimeout = 10000; setRequestProperty("Accept", "application/vnd.github+json"); setRequestProperty("User-Agent", "DahuaViewer") }
-        when (c.responseCode) {
-          200 -> Result.success(parse(c.inputStream.bufferedReader().readText()))
-          404 -> Result.failure(IOException("还没有发布任何版本"))
-          403, 429 -> Result.failure(IOException("GitHub 接口访问次数超限，请过一小时再试"))
-          else -> Result.failure(IOException("服务器返回 ${c.responseCode}"))
-        }
-      } catch (e: Exception) { Result.failure(IOException("网络不通或无法访问 GitHub（${e.javaClass.simpleName}）")) }
+      val res: Result<Rel?> = latest(a)
       a.runOnUiThread {
         if (a.isFinishing) return@runOnUiThread
-        prefs(a).edit().putLong("last", System.currentTimeMillis()).apply()
+        if (res.isSuccess) prefs(a).edit().putLong("last", System.currentTimeMillis()).apply()  // 失败不记时间，下次打开再试
         val r = res.getOrNull()
         when {
-          res.isFailure -> if (manual) MaterialAlertDialogBuilder(a).setTitle("检查更新失败").setMessage(res.exceptionOrNull()?.message).setPositiveButton("好", null).show()
-          r == null -> if (manual) Toast.makeText(a, "最新版本里没有安装包", Toast.LENGTH_LONG).show()
-          cmp(r.tag, BuildConfig.VERSION_NAME) <= 0 -> if (manual) Toast.makeText(a, "已是最新版本（v${BuildConfig.VERSION_NAME}）", Toast.LENGTH_SHORT).show()
+          res.isFailure -> if (manual) MaterialAlertDialogBuilder(a).setTitle("检查更新失败").setMessage(res.exceptionOrNull()?.message + "\n\n可在「我的 → 更新与关于」增加镜像地址后重试。")
+            .setPositiveButton("重试") { _, _ -> check(a, true) }.setNegativeButton("关闭", null).show()
+          r == null -> if (manual) MaterialAlertDialogBuilder(a).setTitle("检查更新失败").setMessage("最新发布里没有找到安装包").setPositiveButton("重试") { _, _ -> check(a, true) }.setNegativeButton("关闭", null).show()
+          cmp(r.tag, BuildConfig.VERSION_NAME) <= 0 -> if (manual) MaterialAlertDialogBuilder(a).setTitle("已是最新版")
+            .setMessage("当前 v${BuildConfig.VERSION_NAME}，线上最新正式版 ${r.tag}（来源：$lastSrc）").setPositiveButton("好", null).show()
           !manual && prefs(a).getString("ignore", "") == r.tag -> {}
           else -> offer(a, r)
         }
@@ -84,9 +78,44 @@ object Updater {
     }
   }
 
+  @Volatile var lastSrc = ""
+  private fun get(url: String, follow: Boolean = true): HttpURLConnection = (URL(url).openConnection() as HttpURLConnection).apply {
+    connectTimeout = 6000; readTimeout = 8000; instanceFollowRedirects = follow
+    setRequestProperty("Accept", "application/vnd.github+json"); setRequestProperty("User-Agent", "ZhongTieXingHua") }
+  /** 依次尝试：GitHub API 直连 → 镜像代理 API → 镜像代理网页（releases/latest 跳转 + expanded_assets），收集每个源的失败原因 */
+  fun latest(c: Context): Result<Rel?> {
+    val errs = mutableListOf<String>()
+    val api = "https://api.github.com/repos/$REPO/releases/latest"
+    for ((name, url) in listOf("GitHub" to api) + mirrorList(c).map { (Uri.parse(it).host ?: it) to it + api }) try {
+      val cn = get(url)
+      when (cn.responseCode) {
+        200 -> { val body = cn.inputStream.bufferedReader().readText()
+          if (body.trimStart().startsWith("{")) { lastSrc = name; return Result.success(parse(body)) } else errs += "$name：返回内容不是 JSON" }
+        404 -> return Result.failure(IOException("还没有发布任何版本"))
+        403, 429 -> errs += "$name：接口限流/拒绝（${cn.responseCode}）"
+        else -> errs += "$name：HTTP ${cn.responseCode}"
+      }
+    } catch (e: Exception) { errs += "$name：${e.javaClass.simpleName}" }
+    for (pre in listOf("") + mirrorList(c)) { val name = if (pre.isEmpty()) "GitHub 网页" else "${Uri.parse(pre).host} 网页"
+      try { htmlLatest(pre)?.let { lastSrc = name; return Result.success(it) }; errs += "$name：解析失败" } catch (e: Exception) { errs += "$name：${e.javaClass.simpleName}" } }
+    return Result.failure(IOException("所有更新源都连不上：\n" + errs.joinToString("\n")))
+  }
+  internal fun htmlLatest(pre: String): Rel? {
+    val cn = get("$pre$GH/releases/latest", follow = false)
+    val loc = cn.getHeaderField("Location") ?: return null
+    val tag = Regex("/releases/tag/([^/?#]+)").find(loc)?.groupValues?.get(1) ?: return null
+    val html = get("$pre$GH/releases/expanded_assets/$tag").inputStream.bufferedReader().readText()
+    return parseAssetsHtml(tag, html)
+  }
+  internal fun parseAssetsHtml(tag: String, html: String): Rel? {
+    val links = Regex("href=\"(/[^\"]+/releases/download/[^\"]+)\"").findAll(html).map { "https://github.com" + it.groupValues[1] }.toList()
+    val apk = links.firstOrNull { it.endsWith(".apk") } ?: return null
+    return Rel(tag, "", apk, apk.substringAfterLast('/'), -1L, links.firstOrNull { it.endsWith(".sha256") }, "$GH/releases/tag/$tag")
+  }
+
   private fun offer(a: Activity, r: Rel) {
     MaterialAlertDialogBuilder(a).setTitle("发现新版本 ${r.tag}")
-      .setMessage("当前 v${BuildConfig.VERSION_NAME}，安装包 %.1f MB\n\n更新日志：\n%s".format(r.size / 1048576.0, r.body.ifBlank { "（无）" }))
+      .setMessage("当前 v${BuildConfig.VERSION_NAME}，安装包 %s\n\n更新日志：\n%s".format(if (r.size > 0) "%.1f MB".format(r.size / 1048576.0) else "大小未知", r.body.ifBlank { "（无）" }))
       .setPositiveButton("立即更新") { _, _ -> download(a, r) }
       .setNegativeButton("稍后", null)
       .setNeutralButton("忽略此版本") { _, _ -> prefs(a).edit().putString("ignore", r.tag).apply() }.show()
@@ -108,8 +137,8 @@ object Updater {
         if (cancelFlag.get()) break
         a.runOnUiThread { msg.text = "从 $name 下载…" }
         try { if (fetch(url, out, r.size, { cancelFlag.get() }) { done, spd -> a.runOnUiThread {
-            bar.isIndeterminate = false; bar.setProgressCompat((done * 100 / r.size).toInt(), true)
-            msg.text = "$name：%.1f / %.1f MB  %d KB/s".format(done / 1048576.0, r.size / 1048576.0, spd) } }) { ok = true; break }
+            if (r.size > 0) { bar.isIndeterminate = false; bar.setProgressCompat((done * 100 / r.size).toInt(), true) }
+            msg.text = "$name：%.1f / %s MB  %d KB/s".format(done / 1048576.0, if (r.size > 0) "%.1f".format(r.size / 1048576.0) else "?", spd) } }) { ok = true; break }
           err = "文件大小不对"
         } catch (e: Exception) { err = e.message ?: e.javaClass.simpleName }
       }
@@ -144,11 +173,11 @@ object Updater {
         val n = inp.read(buf); if (n < 0) break
         o.write(buf, 0, n); done += n
         val el = System.currentTimeMillis() - t0
-        if (el > 10_000 && done * 1000 / el < 30 * 1024 && done < size / 2) throw IOException("速度太慢")
+        if (el > 10_000 && done * 1000 / el < 30 * 1024 && (size <= 0 || done < size / 2)) throw IOException("速度太慢")
         if (System.currentTimeMillis() - lastUi > 300) { lastUi = System.currentTimeMillis(); prog(done, if (el > 0) done * 1000 / el / 1024 else 0) }
       }
     } }
-    return out.length() == size
+    return if (size > 0) out.length() == size else out.length() > 1_000_000
   }
 
   private fun expectedSha(c: Context, r: Rel): String? {

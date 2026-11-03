@@ -22,7 +22,9 @@ import org.videolan.libvlc.util.VLCVideoLayout
 
 object Vlc {
   private var lib: LibVLC? = null
-  fun get(c: Context): LibVLC = lib ?: LibVLC(c.applicationContext, arrayListOf("--rtsp-tcp", "--no-audio")).also { lib = it }
+  /** 单元测试里关掉（LibVLC 找不到 so 会 System.exit） */
+  @Volatile var enabled = true
+  fun get(c: Context): LibVLC = if (!enabled) throw IllegalStateException("vlc off") else lib ?: LibVLC(c.applicationContext, arrayListOf("--rtsp-tcp", "--no-audio")).also { lib = it }
 }
 
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
@@ -93,7 +95,8 @@ class Tile(ctx: Context, showLabel: Boolean = true) : FrameLayout(ctx) {
   private fun start() {
     if (!want) return
     setStatus("缓冲中…")
-    val p = MediaPlayer(Vlc.get(context)); mp = p
+    val p = try { MediaPlayer(Vlc.get(context)) } catch (e: Throwable) { want = false; setStatus("播放器初始化失败", false); return }
+    mp = p
     p.attachViews(layout, null, false, true)
     val m = Media(Vlc.get(context), android.net.Uri.parse(customUrl ?: Cfg.url(context, channel, sub)))
     m.setHWDecoderEnabled(true, false)

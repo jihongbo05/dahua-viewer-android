@@ -402,7 +402,8 @@ class AllPage(a: MainActivity) : Page(a) {
     if (tiles.isNotEmpty() && tiles.size == split && body.childCount > 0) { flipInPlace(); schedulePatrol(); return }
     onHide(); onShow()
   }
-  private fun schedulePatrol() { ph.removeCallbacksAndMessages(null); schedulePatrol() }
+  /** 轮巡定时翻页（1.6.0 这里误写成自调用 → 一进分屏就 StackOverflowError 闪退） */
+  private fun schedulePatrol() { ph.removeCallbacksAndMessages(null); if (patrol != null && split != 0) ph.postDelayed({ if (patrol != null) go(1) }, patrolSec * 1000L) }
   private fun flipInPlace() {
     drawDots()
     val sub = if (split == 1) 0 else 1

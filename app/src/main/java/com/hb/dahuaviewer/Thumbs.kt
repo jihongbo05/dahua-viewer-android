@@ -39,9 +39,10 @@ object Thumbs {
   private fun pump(c: Context) { while (running < 2 && queue.isNotEmpty() && host != null) grab(c, queue.removeFirst()) }
   private fun grab(c: Context, ch: Int) {
     val hostV = host ?: return
+    val lib = try { Vlc.get(c) } catch (_: Throwable) { queue.clear(); return }
     running++
     val lay = VLCVideoLayout(c); hostV.addView(lay, FrameLayout.LayoutParams(c.dp(240), c.dp(135)))
-    val mp = MediaPlayer(Vlc.get(c)); mp.attachViews(lay, null, false, true)
+    val mp = MediaPlayer(lib); mp.attachViews(lay, null, false, true)
     val m = Media(Vlc.get(c), android.net.Uri.parse(Cfg.url(c, ch, 1)))
     m.addOption(":network-caching=500"); m.addOption(":rtsp-tcp"); m.setHWDecoderEnabled(true, false)
     mp.media = m; m.release()
