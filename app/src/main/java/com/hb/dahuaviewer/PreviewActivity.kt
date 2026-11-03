@@ -54,7 +54,7 @@ class PreviewActivity : AppCompatActivity() {
   }
 
   override fun onCreate(b: Bundle?) {
-    initTheme(this); super.onCreate(b)
+    initTheme(this); super.onCreate(b); Sites.init(this)
     ch = b?.getInt("ch") ?: intent.getIntExtra("ch", 1); sub = b?.getInt("sub") ?: Cfg.lastSub(this)
     if (Cfg.flag(this, "keep", true)) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(BG) }

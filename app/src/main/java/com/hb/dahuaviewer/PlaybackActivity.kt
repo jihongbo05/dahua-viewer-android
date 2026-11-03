@@ -40,7 +40,7 @@ class PlaybackActivity : AppCompatActivity() {
   private val full = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.CHINA)
 
   override fun onCreate(b: Bundle?) {
-    initTheme(this); super.onCreate(b)
+    initTheme(this); super.onCreate(b); Sites.init(this)
     ch = intent.getIntExtra("ch", 1)
     if (Cfg.flag(this, "keep", true)) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     val start = Calendar.getInstance().apply { add(Calendar.HOUR_OF_DAY, -1) }

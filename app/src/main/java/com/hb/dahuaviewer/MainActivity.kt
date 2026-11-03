@@ -52,6 +52,7 @@ class MainActivity : AppCompatActivity() {
   override fun onCreate(b: Bundle?) {
     setTheme(R.style.Theme_App); initTheme(this)
     super.onCreate(b)
+    Sites.init(this)
     val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
     content = FrameLayout(this)
     val thumbHost = FrameLayout(this); content.addView(thumbHost, FrameLayout.LayoutParams(-1, -1)); Thumbs.host = thumbHost
@@ -148,6 +149,29 @@ class MainActivity : AppCompatActivity() {
       .setPositiveButton("新建分组") { _, _ -> input("新建分组（长按摄像头可加入分组）") { Cfg.addGroup(this, it); done() } }
       .setNegativeButton("关闭", null).show()
   }
+  /* ---- 多站点 ---- */
+  fun pickSite() {
+    val ids = Sites.ids(this)
+    MaterialAlertDialogBuilder(this).setTitle("切换站点")
+      .setItems(ids.map { (if (it == Sites.cur) "✓ " else "    ") + Sites.name(this, it) + "（${Sites.count(this, it)} 路）" }.toTypedArray()) { _, i ->
+        if (ids[i] != Sites.cur) { Sites.switch(this, ids[i]); recreate() } }
+      .setPositiveButton("管理站点") { _, _ -> manageSite() }
+      .setNeutralButton("添加站点") { _, _ -> input("新站点名称") { n -> val id = Sites.add(this, n, 32); Sites.switch(this, id)
+        Toast.makeText(this, "已添加「$n」，请到 我的 → 连接与账号 填写地址和密码；通道数默认 32，可在 管理站点 修改", Toast.LENGTH_LONG).show(); recreate() } }
+      .setNegativeButton("关闭", null).show()
+  }
+  private fun manageSite() {
+    val id = Sites.cur
+    val items = mutableListOf("重命名「${Sites.name(this, id)}」", "通道数（当前 ${Sites.count(this, id)}）", "地址 / 端口 / 账号密码 → 我的 · 连接与账号")
+    if (id != 1) items += "删除此站点"
+    MaterialAlertDialogBuilder(this).setTitle("管理当前站点").setItems(items.toTypedArray()) { _, i -> when (i) {
+      0 -> input("站点名称") { Sites.edit(this, id, it, Sites.count(this, id)); recreate() }
+      1 -> input("通道数（1～256）") { it.toIntOrNull()?.let { n -> Sites.edit(this, id, Sites.name(this, id), n); recreate() } }
+      2 -> Toast.makeText(this, "在 我的 → 连接与账号 中修改，公网 IP 变了随时可改", Toast.LENGTH_LONG).show()
+      3 -> MaterialAlertDialogBuilder(this).setTitle("删除站点「${Sites.name(this, id)}」？").setMessage("只删除本机保存的该站点配置，不影响录像机")
+        .setPositiveButton("删除") { _, _ -> Sites.remove(this, id); recreate() }.setNegativeButton("取消", null).show()
+    } }.setNegativeButton("关闭", null).show()
+  }
   fun checkOnline(cb: (Cfg.Prof?) -> Unit) { thread { val pr = Net.resolve(this); h.post { cb(pr) } } }
   /* ---- 应用锁 ---- */
   companion object { var unlocked = false; var bgAt = 0L }
@@ -160,7 +184,7 @@ class MainActivity : AppCompatActivity() {
   private fun showLock() {
     if (lockView == null) {
       val v = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setBackgroundColor(BG); isClickable = true
-        addView(icon(R.drawable.ic_videocam, ACCENT, 64)); addView(tv("大华监控已锁定", 18f, TEXT1, true).apply { setPadding(0, dp(12), 0, dp(16)) })
+        addView(icon(R.drawable.ic_videocam, ACCENT, 64)); addView(tv("中铁兴华已锁定", 18f, TEXT1, true).apply { setPadding(0, dp(12), 0, dp(16)) })
         addView(MaterialButton(this@MainActivity).apply { text = "解锁"; setOnClickListener { auth() } }) }
       (window.decorView as ViewGroup).addView(v, ViewGroup.LayoutParams(-1, -1)); lockView = v
     }
@@ -172,7 +196,7 @@ class MainActivity : AppCompatActivity() {
       Toast.makeText(this, "本机未设置指纹/锁屏密码，应用锁暂不生效", Toast.LENGTH_LONG).show(); unlock(); return }
     androidx.biometric.BiometricPrompt(this, mainExecutor, object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
       override fun onAuthenticationSucceeded(r: androidx.biometric.BiometricPrompt.AuthenticationResult) { unlock() }
-    }).authenticate(androidx.biometric.BiometricPrompt.PromptInfo.Builder().setTitle("解锁大华监控").setAllowedAuthenticators(au).build())
+    }).authenticate(androidx.biometric.BiometricPrompt.PromptInfo.Builder().setTitle("解锁中铁兴华").setAllowedAuthenticators(au).build())
   }
   private fun unlock() { unlocked = true; lockView?.let { (window.decorView as ViewGroup).removeView(it) }; lockView = null }
 }
@@ -198,7 +222,7 @@ class HomePage(a: MainActivity) : Page(a) {
   override val view: View = LinearLayout(a).apply {
     orientation = LinearLayout.VERTICAL
     val top = LinearLayout(a).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(a.dp(16), a.dp(12), a.dp(16), a.dp(4)) }
-    top.addView(a.tv("大华监控", 28f, TEXT1, true), LinearLayout.LayoutParams(0, -2, 1f)); top.addView(chip)
+    top.addView(a.tv("${Sites.name(a, Sites.cur)} ▾", 26f, TEXT1, true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; setOnClickListener { a.pickSite() } }, LinearLayout.LayoutParams(0, -2, 1f)); top.addView(chip)
     addView(top)
     addView(search, LinearLayout.LayoutParams(-1, a.dp(46)).apply { setMargins(a.dp(16), a.dp(8), a.dp(16), a.dp(4)) })
     addView(HorizontalScrollView(a).apply { isHorizontalScrollBarEnabled = false; addView(chips) }, LinearLayout.LayoutParams(-1, -2).apply { setMargins(a.dp(12), 0, a.dp(12), 0) })

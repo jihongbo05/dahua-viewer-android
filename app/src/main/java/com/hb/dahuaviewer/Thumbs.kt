@@ -25,7 +25,7 @@ object Thumbs {
   private var running = 0
   private val h = Handler(Looper.getMainLooper())
   var host: FrameLayout? = null
-  fun dir(c: Context) = File(c.cacheDir, "thumbs").apply { mkdirs() }
+  fun dir(c: Context) = File(c.cacheDir, if (Sites.cur == 1) "thumbs" else "thumbs_s${Sites.cur}").apply { mkdirs() }
   fun file(c: Context, ch: Int) = File(dir(c), "ch$ch.jpg")
   fun load(c: Context, ch: Int): Bitmap? = file(c, ch).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path) }
   fun age(c: Context, ch: Int) = file(c, ch).let { if (it.exists()) System.currentTimeMillis() - it.lastModified() else Long.MAX_VALUE }

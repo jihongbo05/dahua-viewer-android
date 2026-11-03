@@ -55,6 +55,7 @@ object Net {
 class WatchWorker(c: Context, p: WorkerParameters) : Worker(c, p) {
   override fun doWork(): Result {
     val c = applicationContext
+    Sites.init(c)
     if (!Cfg.configured(c)) return Result.success()
     val ok = Net.resolve(c) != null
     if (!ok && Cfg.flag(c, "lastOk", true)) Net.notify(c, "监控录像机连不上", "地址都不可达，可能是公网IP变了或网络断了，请检查")

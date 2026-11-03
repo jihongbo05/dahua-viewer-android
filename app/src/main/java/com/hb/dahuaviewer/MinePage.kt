@@ -119,7 +119,7 @@ class MinePage(a: MainActivity) : Page(a) {
     val head = a.card(); val hl = LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(a.dp(16), a.dp(16), a.dp(16), a.dp(16)) }
     hl.addView(FrameLayout(a).apply { background = a.round(soft(ACCENT, 0x26), 14); addView(a.icon(R.drawable.ic_videocam, ACCENT, 26), FrameLayout.LayoutParams(a.dp(26), a.dp(26), android.view.Gravity.CENTER)) }, LinearLayout.LayoutParams(a.dp(48), a.dp(48)))
     val hc = col().apply { setPadding(a.dp(12), 0, a.dp(8), 0) }
-    hc.addView(a.tv("大华录像机", 17f, TEXT1, true)); hc.addView(activeTv.apply { setPadding(0, a.dp(2), 0, 0); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
+    hc.addView(a.tv("${Sites.name(a, Sites.cur)} · 切换 ▾", 17f, TEXT1, true).apply { setOnClickListener { a.pickSite() } }); hc.addView(activeTv.apply { setPadding(0, a.dp(2), 0, 0); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
     hl.addView(hc, LinearLayout.LayoutParams(0, -2, 1f)); hl.addView(statusPill)
     head.addView(hl); root.addView(head, LinearLayout.LayoutParams(-1, -2).apply { setMargins(a.dp(16), a.dp(14), a.dp(16), 0) })
     head.setOnClickListener { open("连接与账号") }
@@ -239,7 +239,7 @@ class MinePage(a: MainActivity) : Page(a) {
       statusPill.setPill("检测中", TEXT2)
       a.checkOnline { pr ->
         test.isEnabled = true; updActive(pr)
-        if (pr == null) { state(ERR, "连不上录像机", "请检查：手机是否联网；公网 IP 是否变了（路由器重拨）；内网地址是否在同一网络"); return@checkOnline }
+        if (pr == null) { state(ERR, "连不上「${Sites.name(a, Sites.cur)}」录像机", "请检查：① 手机是否联网；② 公网 IP 是否变了（联通动态 IP，路由器重拨后会变，可直接在上面改地址）；③ 光猫/路由器是否已把外网端口 ${portE["pub"]?.text} 映射到录像机 554 端口（未做映射时一定连不上）；④ 内网地址是否在同一网络；⑤ 密码是否已填写"); return@checkOnline }
         state(ACCENT, "地址可达（${pr.label}），正在拉取画面…", "通道 1 · 流畅"); videoBox.visibility = View.VISIBLE
         val p = MediaPlayer(Vlc.get(a)); tp = p; p.attachViews(video, null, false, true)
         val m = Media(Vlc.get(a), android.net.Uri.parse(Cfg.url(a, 1, 1)))
@@ -299,7 +299,7 @@ class MinePage(a: MainActivity) : Page(a) {
     // 关于
     val s6 = section(pUpd, "关于")
     val ab = col(); ab.addView(a.tv("开源的大华录像机手机查看工具，RTSP（TCP）直连录像机。支持实时预览、录像回放、轮巡、分组、电子放大、本地录像、掉线提醒、在线更新。\n项目地址：github.com/${Updater.REPO}", 12f, TEXT2).apply { setPadding(0, a.dp(4), 0, a.dp(4)); setLineSpacing(0f, 1.2f) })
-    fold(s6, "大华监控 v${BuildConfig.VERSION_NAME}", ab)
+    fold(s6, "中铁兴华 v${BuildConfig.VERSION_NAME}", ab)
     mainScroll = ScrollView(a).apply { addView(root); isVerticalScrollBarEnabled = false }
     holder.addView(mainScroll, FrameLayout.LayoutParams(-1, -1)); view = holder
     updMode()

@@ -74,6 +74,7 @@ object Cloud {
 
   /** 首次/本机无密码时从最新 Release 拉 cloud-config.enc */
   fun fetchAndApply(c: Context, force: Boolean = false, done: ((String) -> Unit)? = null) {
+    if (Sites.cur != 1) { done?.invoke("云端配置只用于站点1（BBAC 库房）"); return }
     thread {
       val msg = try {
         if (!force && Cfg.pass(c).isNotEmpty() && Cfg.configured(c)) { "本机已有配置，跳过云端密码"; return@thread done?.invoke("本机已有配置") ?: Unit }
@@ -107,6 +108,7 @@ object Cloud {
   }
 
   fun applyDefaults(c: Context, cfg: CloudCfg? = null) {
+    if (Sites.cur != 1) return
     val pubH = cfg?.pubHost ?: DEF_PUB_HOST; val pubP = cfg?.pubPort ?: DEF_PUB_PORT
     val lanH = cfg?.lanHost ?: DEF_LAN_HOST; val lanP = cfg?.lanPort ?: DEF_LAN_PORT
     val u = cfg?.user ?: DEF_USER
@@ -164,6 +166,7 @@ object Cloud {
   }
 
   fun pullChannels(c: Context, done: ((String) -> Unit)? = null) {
+    if (Sites.cur != 1) { done?.invoke("通道云同步目前只用于站点1"); return }
     thread {
       val msg = try {
         var body: String? = null
@@ -177,6 +180,7 @@ object Cloud {
 
   /** 有 sync_token 时用 Contents API 更新 channels.json；否则返回需手动导出 */
   fun pushChannels(c: Context, done: ((String) -> Unit)? = null) {
+    if (Sites.cur != 1) { done?.invoke("通道云同步目前只用于站点1"); return }
     thread {
       val msg = try {
         val token = Cfg.syncToken(c)

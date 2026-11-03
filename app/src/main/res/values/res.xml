@@ -1,5 +1,5 @@
 <resources>
-  <color name="accent">#FF6A00</color><color name="bg">#F2F2F7</color>
+  <color name="icon_bg">#007AFF</color><color name="accent">#FF6A00</color><color name="bg">#F2F2F7</color>
   <style name="Theme.App" parent="Theme.Material3.DayNight.NoActionBar">
     <item name="colorPrimary">@color/accent</item><item name="colorOnPrimary">#FFFFFF</item>
     <item name="colorSecondaryContainer">#FFE3D1</item><item name="colorPrimaryContainer">#FFE3D1</item>

@@ -7,14 +7,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 object Cfg {
-  private fun p(c: Context) = c.getSharedPreferences("cfg", 0)
+  private fun p(c: Context) = c.getSharedPreferences(Sites.prefsName(Sites.cur), 0)
   /** 真机用 EncryptedSharedPreferences；Robolectric 等无 AndroidKeyStore 时降级普通 prefs */
   private fun sec(c: Context) = try {
-    EncryptedSharedPreferences.create(c, "sec",
+    EncryptedSharedPreferences.create(c, Sites.secName(Sites.cur),
       MasterKey.Builder(c).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
       EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV, EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
-  } catch (_: Throwable) { c.getSharedPreferences("sec_fallback", 0) }
-  const val COUNT = 64
+  } catch (_: Throwable) { c.getSharedPreferences(Sites.secName(Sites.cur) + "_fallback", 0) }
+  val COUNT: Int get() = Sites.count
   fun host(c: Context) = p(c).getString("host", "")!!
   fun port(c: Context) = p(c).getInt("port", 554)
   fun user(c: Context) = p(c).getString("user", "use")!!
